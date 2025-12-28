@@ -1,9 +1,12 @@
 """Command-line interface for menu-kit."""
 
+from __future__ import annotations
+
 import argparse
 import sys
 
 from menu_kit import __version__
+from menu_kit.core.runner import Runner, RunnerOptions
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -71,15 +74,22 @@ def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
     args = parse_args(argv)
 
-    # TODO: Implement the actual menu logic
-    if args.print_items:
-        print("Settings")
-        print("Plugins")
-        return 0
+    options = RunnerOptions(
+        backend=args.backend,
+        backend_args=args.backend_args,
+        terminal=args.terminal,
+        print_items=args.print_items,
+        dry_run=args.dry_run,
+        rebuild=args.rebuild,
+        plugin=args.plugin,
+        selections=args.selections if args.selections else None,
+    )
 
-    print(f"menu-kit {__version__}")
-    print("Not yet implemented. Use --help for options.")
-    return 0
+    runner = Runner(options)
+    try:
+        return runner.run()
+    finally:
+        runner.teardown()
 
 
 if __name__ == "__main__":
