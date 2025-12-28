@@ -1,0 +1,63 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "menu-kit"
+version = "0.0.1"
+description = "A modular, menu-agnostic launcher for Linux"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "Mark Hedley Jones", email = "mark@markhedleyjones.com" }
+]
+keywords = ["menu", "launcher", "dmenu", "rofi", "fuzzel", "linux"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: X11 Applications",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Desktop Environment",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.0",
+    "mypy>=1.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+menu-kit = "menu_kit.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/markhedleyjones/menu-kit"
+Repository = "https://github.com/markhedleyjones/menu-kit"
+Issues = "https://github.com/markhedleyjones/menu-kit/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/menu_kit"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
