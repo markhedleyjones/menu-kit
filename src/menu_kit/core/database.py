@@ -153,7 +153,7 @@ class Database:
         with self._connect() as conn:
             row = conn.execute(
                 """
-                SELECT i.*, f.count, f.last_used
+                SELECT i.*, COALESCE(f.count, 0) as count, f.last_used
                 FROM items i
                 LEFT JOIN frequency f ON i.id = f.item_id
                 WHERE i.id = ?
