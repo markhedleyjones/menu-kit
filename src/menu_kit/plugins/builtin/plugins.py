@@ -40,18 +40,18 @@ class PluginsPlugin(Plugin):
             items = [
                 MenuItem(
                     id="plugins:installed",
-                    title="Installed",
+                    title="View Installed Plugins",
                     item_type=ItemType.SUBMENU,
                     badge=str(installed_count),
                 ),
                 MenuItem(
                     id="plugins:browse",
-                    title="Browse Plugins",
+                    title="Install New Plugins",
                     item_type=ItemType.SUBMENU,
                 ),
                 MenuItem(
                     id="plugins:updates",
-                    title="Check for Updates",
+                    title="Update Plugins",
                     item_type=ItemType.ACTION,
                 ),
             ]
@@ -177,16 +177,15 @@ class PluginsPlugin(Plugin):
 
     def _show_browse(self, ctx: PluginContext) -> None:
         """Show available plugins for installation."""
-        while True:
-            items = [
-                MenuItem(
-                    id="plugins:browse:info",
-                    title="Connect to repository to browse plugins",
-                    item_type=ItemType.INFO,
-                ),
-            ]
+        repos = ctx.config.plugins.repositories
 
-            repos = ctx.config.plugins.repositories
+        # Skip repository selection if only one repo configured
+        if len(repos) == 1:
+            self._show_repo_plugins(ctx, repos[0])
+            return
+
+        while True:
+            items = []
             for repo in repos:
                 # Show "Official" for the official repo, path for others
                 title = "Official" if repo == self.OFFICIAL_REPO else repo
@@ -198,7 +197,7 @@ class PluginsPlugin(Plugin):
                     )
                 )
 
-            selected = ctx.menu(items, prompt="Browse Plugins")
+            selected = ctx.menu(items, prompt="Select Repository")
             if selected is None:
                 return
 
@@ -306,6 +305,8 @@ class PluginsPlugin(Plugin):
                 return
 
             if selected.id.endswith(":install"):
+                # Show immediate feedback that install is starting
+                ctx.notify(f"Installing {plugin_name}...")
                 if self._install_plugin(ctx, repo, plugin_name, plugin_info):
                     ctx.notify(f"Installed {plugin_name}")
                     return

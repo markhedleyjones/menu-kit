@@ -217,20 +217,15 @@ class TestPluginsNavigation:
         assert backend.captures[2].prompt == "Plugins"
 
     def test_plugins_browse_menu(self, temp_dir: Path) -> None:
-        """Navigating to Browse shows repository list."""
+        """Navigating to Browse skips to repo plugins when only one repo configured."""
         ctx, backend = create_context(temp_dir, ["plugins:browse", "_back", "_back"])
         plugin = PluginsPlugin()
 
         plugin.run(ctx)
 
-        assert len(backend.captures) == 3
-
-        # Second menu: Browse Plugins
-        browse_menu = backend.captures[1]
-        assert browse_menu.prompt == "Browse Plugins"
-        item_ids = [item.id for item in browse_menu.items]
-        assert "_back" in item_ids
-        assert "plugins:browse:info" in item_ids
+        # With one repo, skips directly to showing repo plugins
+        prompts = [c.prompt for c in backend.captures]
+        assert prompts == ["Plugins", "Official", "Plugins"]
 
     def test_plugins_deep_navigation(self, temp_dir: Path) -> None:
         """Test deep navigation: Plugins → Installed → plugin options → back → back → back."""
@@ -273,12 +268,12 @@ class TestPluginsNavigation:
         prompts = [c.prompt for c in backend.captures]
         assert prompts == ["Plugins", "Installed Plugins", "Plugins"]
 
-        # Test: Plugins → Browse → back → back
+        # Test: Plugins → Browse → back → back (skips to repo when one repo)
         ctx, backend = create_context(temp_dir, ["plugins:browse", "_back", "_back"])
         plugin = PluginsPlugin()
         plugin.run(ctx)
         prompts = [c.prompt for c in backend.captures]
-        assert prompts == ["Plugins", "Browse Plugins", "Plugins"]
+        assert prompts == ["Plugins", "Official", "Plugins"]
 
 
 class TestNavigationPaths:
@@ -376,10 +371,10 @@ class TestNavigationPaths:
                 ["plugins:installed", "_back", "_back"],
                 ["Plugins", "Installed Plugins", "Plugins"],
             ),
-            # Navigate to Browse, then back
+            # Navigate to Browse, then back (skips to repo with one repo)
             (
                 ["plugins:browse", "_back", "_back"],
-                ["Plugins", "Browse Plugins", "Plugins"],
+                ["Plugins", "Official", "Plugins"],
             ),
             # Select settings plugin in Installed, then back out
             (
@@ -436,7 +431,7 @@ class TestNavigationPaths:
                     "Plugins",
                 ],
             ),
-            # Visit both submenus in one session
+            # Visit both submenus in one session (browse skips to repo with one repo)
             (
                 [
                     "plugins:installed",
@@ -449,7 +444,7 @@ class TestNavigationPaths:
                     "Plugins",
                     "Installed Plugins",
                     "Plugins",
-                    "Browse Plugins",
+                    "Official",  # Skips directly to repo plugins
                     "Plugins",
                 ],
             ),
@@ -468,14 +463,12 @@ class TestNavigationPaths:
         assert prompts == expected_prompts
 
     def test_plugins_browse_repo_selection(self, temp_dir: Path) -> None:
-        """Test selecting a repository in Browse menu."""
-        # Default config has one repository: markhedleyjones/menu-kit-plugins
+        """Test browsing plugins with single repo skips to repo directly."""
+        # Default config has one repository - should skip selection screen
         ctx, backend = create_context(
             temp_dir,
             [
                 "plugins:browse",
-                "plugins:repo:markhedleyjones/menu-kit-plugins",
-                "_back",
                 "_back",
                 "_back",
             ],
@@ -485,21 +478,18 @@ class TestNavigationPaths:
         plugin.run(ctx)
 
         prompts = [c.prompt for c in backend.captures]
-        # With network: fetches index and shows repo plugins menu
-        # Without network: shows notification and stays in Browse menu
-        assert prompts in [
-            # Network available - shows repo plugins (Official) then back out
-            ["Plugins", "Browse Plugins", "Official", "Browse Plugins", "Plugins"],
-            # Network unavailable - shows notification, stays in browse
-            ["Plugins", "Browse Plugins", "Browse Plugins", "Plugins"],
-        ]
+        # With one repo, skips directly to repo plugins (Official)
+        assert prompts == ["Plugins", "Official", "Plugins"]
 
 
 class TestMenuItemBehavior:
     """Tests for what happens when each menu item is selected."""
 
     def test_settings_frequency_shows_notification(
-        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        temp_dir: Path,
+        capsys: pytest.CaptureFixture[str],
+        disable_notify_send: None,
     ) -> None:
         """Selecting Frequency Tracking shows appropriate notification."""
         ctx, _ = create_context(temp_dir, ["settings:frequency", "_back"])
@@ -511,7 +501,10 @@ class TestMenuItemBehavior:
         assert "frequency" in captured.out.lower()
 
     def test_settings_backend_selection_shows_notification(
-        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        temp_dir: Path,
+        capsys: pytest.CaptureFixture[str],
+        disable_notify_send: None,
     ) -> None:
         """Selecting a backend option shows confirmation notification."""
         ctx, _ = create_context(
@@ -525,7 +518,10 @@ class TestMenuItemBehavior:
         assert "backend" in captured.out.lower() or "fzf" in captured.out.lower()
 
     def test_settings_rebuild_shows_notification(
-        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        temp_dir: Path,
+        capsys: pytest.CaptureFixture[str],
+        disable_notify_send: None,
     ) -> None:
         """Selecting Rebuild Cache shows appropriate notification."""
         ctx, _ = create_context(temp_dir, ["settings:rebuild", "_back"])
@@ -537,7 +533,10 @@ class TestMenuItemBehavior:
         assert "rebuild" in captured.out.lower() or "cache" in captured.out.lower()
 
     def test_plugins_updates_shows_notification(
-        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        temp_dir: Path,
+        capsys: pytest.CaptureFixture[str],
+        disable_notify_send: None,
     ) -> None:
         """Selecting Check for Updates shows appropriate notification."""
         ctx, _ = create_context(temp_dir, ["plugins:updates", "_back"])
@@ -549,7 +548,10 @@ class TestMenuItemBehavior:
         assert "update" in captured.out.lower()
 
     def test_plugins_installed_settings_toggle_shows_notification(
-        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        temp_dir: Path,
+        capsys: pytest.CaptureFixture[str],
+        disable_notify_send: None,
     ) -> None:
         """Toggling display mode in plugin options shows notification."""
         ctx, _ = create_context(
@@ -571,7 +573,10 @@ class TestMenuItemBehavior:
         assert "display mode" in captured.out.lower()
 
     def test_plugins_installed_plugins_toggle_shows_notification(
-        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        temp_dir: Path,
+        capsys: pytest.CaptureFixture[str],
+        disable_notify_send: None,
     ) -> None:
         """Toggling display mode in plugin options shows notification."""
         ctx, _ = create_context(
@@ -593,15 +598,16 @@ class TestMenuItemBehavior:
         assert "display mode" in captured.out.lower()
 
     def test_plugins_browse_repo_shows_plugins_or_error(
-        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        temp_dir: Path,
+        capsys: pytest.CaptureFixture[str],
+        disable_notify_send: None,
     ) -> None:
-        """Selecting a repository shows plugins menu or error notification."""
+        """Browsing shows plugins menu or error notification."""
         ctx, backend = create_context(
             temp_dir,
             [
                 "plugins:browse",
-                "plugins:repo:markhedleyjones/menu-kit-plugins",
-                "_back",
                 "_back",
                 "_back",
             ],
@@ -612,6 +618,7 @@ class TestMenuItemBehavior:
 
         captured = capsys.readouterr()
         prompts = [c.prompt for c in backend.captures]
+        # With one repo, skips to repo plugins directly
         # Either shows error notification (no network) or shows repo menu (network ok)
         has_error = "failed" in captured.out.lower() or "fetch" in captured.out.lower()
         shows_repo_menu = "Official" in prompts
@@ -674,12 +681,11 @@ class TestMenuItemBehavior:
 
         plugin.run(ctx)
 
-        browse_menu = backend.captures[1]
-        repo_items = [i for i in browse_menu.items if i.id.startswith("plugins:repo:")]
-        assert len(repo_items) == 1
-        assert repo_items[0].title == "Official"
-        # But the ID still contains the actual repo path
-        assert "markhedleyjones" in repo_items[0].id
+        # With one repo, we skip directly to it - verify prompt is "Official"
+        prompts = [c.prompt for c in backend.captures]
+        assert "Official" in prompts
+        # Should NOT show the full repo path as prompt
+        assert "markhedleyjones" not in str(prompts)
 
 
 class TestMenuItemConsistency:

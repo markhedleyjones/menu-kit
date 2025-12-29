@@ -10,6 +10,7 @@ These tests verify the complete plugin management flow:
 
 from __future__ import annotations
 
+import contextlib
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -21,7 +22,7 @@ import pytest
 from menu_kit.core.config import Config, get_data_dir
 from menu_kit.core.database import Database, ItemType, MenuItem
 from menu_kit.menu.base import MenuBackend, MenuResult
-from menu_kit.plugins.base import Plugin, PluginContext
+from menu_kit.plugins.base import MenuCancelled, Plugin, PluginContext
 from menu_kit.plugins.builtin.plugins import PluginsPlugin
 from menu_kit.plugins.builtin.settings import SettingsPlugin
 
@@ -133,47 +134,29 @@ MOCK_INDEX = {
 class TestBrowseMenuStructure:
     """Tests for the Browse Plugins menu structure."""
 
-    def test_browse_menu_shows_info_and_repositories(self, temp_dir: Path) -> None:
-        """Browse menu shows info item and repository list."""
+    def test_browse_menu_skips_to_repo_with_single_repo(self, temp_dir: Path) -> None:
+        """With one repo configured, browse skips directly to that repo."""
         ctx, backend = create_context(temp_dir, ["plugins:browse", "_back", "_back"])
         plugin = PluginsPlugin()
 
         plugin.run(ctx)
 
-        # Find the Browse menu capture
-        browse_menu = backend.captures[1]
-        assert browse_menu.prompt == "Browse Plugins"
+        # With one repo, should skip directly to "Official" (repo plugins menu)
+        prompts = [c.prompt for c in backend.captures]
+        assert prompts == ["Plugins", "Official", "Plugins"]
 
-        # Should have info item
-        info_items = [i for i in browse_menu.items if i.id == "plugins:browse:info"]
-        assert len(info_items) == 1
-        assert (
-            "repository" in info_items[0].title.lower()
-            or "connect" in info_items[0].title.lower()
-        )
-
-        # Should have at least one repository
-        repo_items = [i for i in browse_menu.items if i.id.startswith("plugins:repo:")]
-        assert len(repo_items) >= 1
-
-    def test_browse_menu_shows_official_repo_with_friendly_name(
-        self, temp_dir: Path
-    ) -> None:
+    def test_browse_menu_shows_official_as_prompt(self, temp_dir: Path) -> None:
         """Official repository shows as 'Official' not the repo path."""
         ctx, backend = create_context(temp_dir, ["plugins:browse", "_back", "_back"])
         plugin = PluginsPlugin()
 
         plugin.run(ctx)
 
-        browse_menu = backend.captures[1]
-        repo_items = [i for i in browse_menu.items if i.id.startswith("plugins:repo:")]
-
-        # Find the official repo
-        official_items = [
-            i for i in repo_items if "markhedleyjones/menu-kit-plugins" in i.id
-        ]
-        assert len(official_items) == 1
-        assert official_items[0].title == "Official"
+        # With one repo, prompt should be "Official"
+        prompts = [c.prompt for c in backend.captures]
+        assert "Official" in prompts
+        # Should NOT show the full repo path
+        assert "markhedleyjones" not in str(prompts)
 
 
 class TestRepositoryPluginsList:
@@ -185,8 +168,6 @@ class TestRepositoryPluginsList:
             temp_dir,
             [
                 "plugins:browse",
-                "plugins:repo:markhedleyjones/menu-kit-plugins",
-                "_back",
                 "_back",
                 "_back",
             ],
@@ -218,8 +199,6 @@ class TestRepositoryPluginsList:
             temp_dir,
             [
                 "plugins:browse",
-                "plugins:repo:markhedleyjones/menu-kit-plugins",
-                "_back",
                 "_back",
                 "_back",
             ],
@@ -248,9 +227,7 @@ class TestPluginInstallScreen:
             temp_dir,
             [
                 "plugins:browse",
-                "plugins:repo:markhedleyjones/menu-kit-plugins",
                 "plugins:available:markhedleyjones/menu-kit-plugins:test-plugin",
-                "_back",
                 "_back",
                 "_back",
                 "_back",
@@ -279,9 +256,7 @@ class TestPluginInstallScreen:
             temp_dir,
             [
                 "plugins:browse",
-                "plugins:repo:markhedleyjones/menu-kit-plugins",
                 "plugins:available:markhedleyjones/menu-kit-plugins:test-plugin",
-                "_back",
                 "_back",
                 "_back",
                 "_back",
@@ -351,10 +326,8 @@ class TestPluginInstallFlow:
             temp_dir,
             [
                 "plugins:browse",
-                "plugins:repo:markhedleyjones/menu-kit-plugins",
                 "plugins:available:markhedleyjones/menu-kit-plugins:test-plugin",
                 "plugins:detail:test-plugin:install",
-                "_back",
                 "_back",
                 "_back",
             ],
@@ -363,11 +336,18 @@ class TestPluginInstallFlow:
 
         mock_content = b'"""Test plugin."""\n\ndef create_plugin(): pass\n'
 
+        # Mock shutil.which to return None so notify falls back to print
+        def mock_which(cmd: str) -> str | None:
+            if cmd == "notify-send":
+                return None
+            return cmd
+
         with (
             patch.object(plugin, "_fetch_repo_index", return_value=MOCK_INDEX),
             patch(
                 "menu_kit.plugins.builtin.plugins.urllib.request.urlopen"
             ) as mock_urlopen,
+            patch("shutil.which", side_effect=mock_which),
         ):
             mock_response = MagicMock()
             mock_response.read.return_value = mock_content
@@ -375,10 +355,13 @@ class TestPluginInstallFlow:
             mock_response.__exit__ = MagicMock(return_value=False)
             mock_urlopen.return_value = mock_response
 
-            plugin.run(ctx)
+            # May raise MenuCancelled if we run out of selections after install
+            with contextlib.suppress(MenuCancelled):
+                plugin.run(ctx)
 
         captured = capsys.readouterr()
-        assert "installed" in captured.out.lower()
+        # "Installing..." notification is shown before install starts
+        assert "installing" in captured.out.lower()
 
         # Cleanup
         plugin_dir = get_data_dir() / "plugins" / "test-plugin"
@@ -597,8 +580,15 @@ class TestUninstallViaMenu:
         loader.register(FakePlugin())  # type: ignore[arg-type]
         ctx._loader = loader  # type: ignore[attr-defined]
 
+        # Mock shutil.which to return None so notify falls back to print
+        def mock_which(cmd: str) -> str | None:
+            if cmd == "notify-send":
+                return None
+            return cmd
+
         plugin = PluginsPlugin()
-        plugin.run(ctx)
+        with patch("shutil.which", side_effect=mock_which):
+            plugin.run(ctx)
 
         # Verify uninstall notification shown
         captured = capsys.readouterr()

@@ -75,10 +75,27 @@ class PluginContext:
 
         return result.selected
 
-    def notify(self, message: str) -> None:
-        """Show a notification to the user."""
-        # TODO: Implement notification system
-        print(f"[notify] {message}")
+    def notify(self, message: str, title: str = "menu-kit") -> None:
+        """Show a notification to the user.
+
+        Uses notify-send for desktop notifications on Linux.
+        Falls back to printing if notify-send is unavailable.
+        """
+        import shutil
+        import subprocess
+
+        if shutil.which("notify-send"):
+            try:
+                subprocess.run(
+                    ["notify-send", title, message],
+                    check=False,
+                    capture_output=True,
+                )
+                return
+            except OSError:
+                pass
+        # Fallback to console
+        print(f"[{title}] {message}")
 
     def get_data(self, key: str) -> Any:
         """Get plugin-specific data from storage."""
