@@ -75,6 +75,7 @@ class Config:
     display: DisplayConfig = field(default_factory=DisplayConfig)
     plugins: PluginsConfig = field(default_factory=PluginsConfig)
     frequency_tracking: bool = True
+    _source_path: Path | None = field(default=None, repr=False)
 
     @classmethod
     def load(cls, path: Path | None = None) -> Config:
@@ -83,12 +84,16 @@ class Config:
             path = get_config_dir() / "config.toml"
 
         if not path.exists():
-            return cls()
+            config = cls()
+            config._source_path = path
+            return config
 
         with path.open("rb") as f:
             data = tomllib.load(f)
 
-        return cls.from_dict(data)
+        config = cls.from_dict(data)
+        config._source_path = path
+        return config
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Config:
@@ -138,7 +143,7 @@ class Config:
     def save(self, path: Path | None = None) -> None:
         """Save configuration to file."""
         if path is None:
-            path = get_config_dir() / "config.toml"
+            path = self._source_path or (get_config_dir() / "config.toml")
 
         # Ensure directory exists
         path.parent.mkdir(parents=True, exist_ok=True)

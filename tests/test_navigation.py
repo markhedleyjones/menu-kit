@@ -76,7 +76,7 @@ def create_context(
     temp_dir: Path, selections: list[str | None]
 ) -> tuple[PluginContext, MockBackend]:
     """Create a plugin context with a mock backend."""
-    config = Config()
+    config = Config.load(temp_dir / "config.toml")
     database = Database(temp_dir / "test.db")
     backend = MockBackend(selections=selections)
     ctx = PluginContext(config=config, database=database, menu_backend=backend)
