@@ -179,6 +179,8 @@ class PluginLoader:
         Returns:
             True if plugin was found and run, False otherwise
         """
+        from menu_kit.plugins.base import MenuCancelled
+
         # Parse plugin:action format
         if ":" in name and not action:
             name, action = name.split(":", 1)
@@ -191,6 +193,9 @@ class PluginLoader:
 
         try:
             plugin.run(ctx, action)
+            return True
+        except MenuCancelled:
+            # User pressed ESC - this is a normal exit, not an error
             return True
         except Exception as e:
             print(f"Error running plugin {name}: {e}")

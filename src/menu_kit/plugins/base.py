@@ -19,6 +19,14 @@ if TYPE_CHECKING:
 BACK_SELECTED = object()
 
 
+class MenuCancelled(Exception):
+    """Raised when user cancels (ESC) the menu.
+
+    This exception propagates up to exit the entire plugin menu tree,
+    rather than just going back one level like the Back button.
+    """
+
+
 @dataclass
 class PluginContext:
     """Context passed to plugins, providing access to core functionality."""
@@ -41,7 +49,10 @@ class PluginContext:
             show_back: Whether to show a back button (default True)
 
         Returns:
-            Selected MenuItem, or None if cancelled/back selected
+            Selected MenuItem, or None if back button selected
+
+        Raises:
+            MenuCancelled: If user presses ESC (cancels the menu)
         """
         display_items = list(items)
 
@@ -57,7 +68,7 @@ class PluginContext:
         result = self.menu_backend.show(display_items, prompt)
 
         if result.cancelled:
-            return None
+            raise MenuCancelled()
 
         if result.selected and result.selected.id == "_back":
             return None
