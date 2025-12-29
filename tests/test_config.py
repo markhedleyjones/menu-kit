@@ -82,3 +82,49 @@ def test_get_backend_args() -> None:
     assert config.get_backend_args("fzf") == ["--height=50%"]
     assert config.get_backend_args("dmenu") == []
     assert config.get_backend_args("unknown") == []
+
+
+def test_config_save(temp_dir: Path) -> None:
+    """Test saving config to file."""
+    config = Config()
+    config.frequency_tracking = False
+    config.menu.backend = "rofi"
+
+    config_path = temp_dir / "config.toml"
+    config.save(config_path)
+
+    # Reload and verify
+    loaded = Config.load(config_path)
+    assert loaded.frequency_tracking is False
+    assert loaded.menu.backend == "rofi"
+
+
+def test_config_save_roundtrip(temp_dir: Path) -> None:
+    """Test that save/load roundtrip preserves values."""
+    original = Config.from_dict(
+        {
+            "menu": {"backend": "fuzzel"},
+            "frequency_tracking": False,
+            "plugins": {
+                "repositories": ["markhedleyjones/menu-kit-plugins", "custom/repo"]
+            },
+        }
+    )
+
+    config_path = temp_dir / "config.toml"
+    original.save(config_path)
+    loaded = Config.load(config_path)
+
+    assert loaded.menu.backend == original.menu.backend
+    assert loaded.frequency_tracking == original.frequency_tracking
+    assert loaded.plugins.repositories == original.plugins.repositories
+
+
+def test_config_save_creates_directory(temp_dir: Path) -> None:
+    """Test that save creates parent directories if needed."""
+    config = Config()
+    config_path = temp_dir / "subdir" / "nested" / "config.toml"
+
+    config.save(config_path)
+
+    assert config_path.exists()
