@@ -71,6 +71,13 @@ def get_available_backends() -> list[type[MenuBackend]]:
     return [RofiBackend, DmenuBackend, FuzzelBackend, FzfBackend, StdoutBackend]
 
 
+# GUI backends that open a window (work with keyboard shortcuts)
+GUI_BACKENDS = ["rofi", "dmenu", "fuzzel"]
+
+# Terminal backends that need a terminal (fzf) or just print (stdout)
+TERMINAL_BACKENDS = ["fzf", "stdout"]
+
+
 def get_backend(name: str | None = None) -> MenuBackend | None:
     """Get a menu backend by name, or auto-detect."""
     from menu_kit.menu.dmenu import DmenuBackend
@@ -103,3 +110,15 @@ def get_backend(name: str | None = None) -> MenuBackend | None:
             return backend
 
     return None
+
+
+def check_gui_backend_available() -> bool:
+    """Check if any GUI backend is available."""
+    from menu_kit.menu.dmenu import DmenuBackend
+    from menu_kit.menu.fuzzel import FuzzelBackend
+    from menu_kit.menu.rofi import RofiBackend
+
+    for backend_class in [RofiBackend, DmenuBackend, FuzzelBackend]:
+        if backend_class().is_available():
+            return True
+    return False

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from menu_kit.core.config import Config
 from menu_kit.core.database import Database, MenuItem
-from menu_kit.menu.base import get_backend
+from menu_kit.menu.base import GUI_BACKENDS, get_backend
 from menu_kit.plugins.loader import PluginLoader
 
 if TYPE_CHECKING:
@@ -69,7 +69,24 @@ class Runner:
         self.backend = get_backend(backend_name)
         if self.backend is None:
             print("Error: No menu backend available", file=sys.stderr)
+            print(
+                "Install one of: rofi, dmenu, fuzzel (GUI) or fzf (terminal)",
+                file=sys.stderr,
+            )
             return EXIT_NO_BACKEND
+
+        # Warn if using terminal backend without explicit request
+        if (
+            self.backend.name not in GUI_BACKENDS
+            and not self.options.terminal
+            and not self.options.print_items
+            and not backend_name
+        ):
+            print(
+                f"Warning: Using terminal backend '{self.backend.name}'. "
+                "Install rofi, dmenu, or fuzzel for GUI mode.",
+                file=sys.stderr,
+            )
 
         # Load plugins
         self.loader = PluginLoader(self.config, self.database, self.backend)
