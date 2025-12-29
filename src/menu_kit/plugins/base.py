@@ -6,10 +6,16 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from menu_kit.core.database import ItemType, MenuItem
+
 if TYPE_CHECKING:
     from menu_kit.core.config import Config
-    from menu_kit.core.database import Database, MenuItem
+    from menu_kit.core.database import Database
     from menu_kit.menu.base import MenuBackend
+
+
+# Sentinel for back navigation
+BACK_SELECTED = object()
 
 
 @dataclass
@@ -20,10 +26,41 @@ class PluginContext:
     database: Database
     menu_backend: MenuBackend
 
-    def menu(self, items: list[MenuItem], prompt: str = "") -> MenuItem | None:
-        """Show a menu and return the selected item."""
+    def menu(
+        self,
+        items: list[MenuItem],
+        prompt: str = "",
+        show_back: bool = True,
+    ) -> MenuItem | None:
+        """Show a menu and return the selected item.
 
-        result = self.menu_backend.show(items, prompt)
+        Args:
+            items: Menu items to display
+            prompt: Menu prompt text
+            show_back: Whether to show a back button (default True)
+
+        Returns:
+            Selected MenuItem, or None if cancelled/back selected
+        """
+        display_items = list(items)
+
+        # Add back button at the bottom if enabled
+        if show_back:
+            back_item = MenuItem(
+                id="_back",
+                title="← Back",
+                item_type=ItemType.ACTION,
+            )
+            display_items.append(back_item)
+
+        result = self.menu_backend.show(display_items, prompt)
+
+        if result.cancelled:
+            return None
+
+        if result.selected and result.selected.id == "_back":
+            return None
+
         return result.selected
 
     def notify(self, message: str) -> None:
