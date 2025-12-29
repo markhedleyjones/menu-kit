@@ -134,3 +134,57 @@ class Config:
         if backend_config is None:
             return []
         return backend_config.args
+
+    def save(self, path: Path | None = None) -> None:
+        """Save configuration to file."""
+        if path is None:
+            path = get_config_dir() / "config.toml"
+
+        # Ensure directory exists
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        lines = []
+
+        # Root level settings
+        lines.append(f"frequency_tracking = {str(self.frequency_tracking).lower()}")
+        lines.append("")
+
+        # Menu section
+        lines.append("[menu]")
+        if self.menu.backend:
+            lines.append(f'backend = "{self.menu.backend}"')
+        lines.append("")
+
+        # Backend args (only if non-empty)
+        for backend_name in ["rofi", "fuzzel", "dmenu", "fzf"]:
+            backend_config = getattr(self.menu, backend_name)
+            if backend_config.args:
+                lines.append(f"[menu.{backend_name}]")
+                args_str = ", ".join(f'"{a}"' for a in backend_config.args)
+                lines.append(f"args = [{args_str}]")
+                lines.append("")
+
+        # Display section (only non-defaults)
+        display_lines = []
+        if self.display.submenu_prefix != "→ ":
+            display_lines.append(f'submenu_prefix = "{self.display.submenu_prefix}"')
+        if not self.display.show_info_items:
+            display_lines.append("show_info_items = false")
+        if not self.display.show_headers:
+            display_lines.append("show_headers = false")
+        if not self.display.show_separators:
+            display_lines.append("show_separators = false")
+
+        if display_lines:
+            lines.append("[display]")
+            lines.extend(display_lines)
+            lines.append("")
+
+        # Plugins section
+        lines.append("[plugins]")
+        repos_str = ", ".join(f'"{r}"' for r in self.plugins.repositories)
+        lines.append(f"repositories = [{repos_str}]")
+        if self.plugins.allow_unverified:
+            lines.append("allow_unverified = true")
+
+        path.write_text("\n".join(lines) + "\n")
