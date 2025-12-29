@@ -19,16 +19,18 @@ All plugin repository functionality is working end-to-end.
 - Install: Downloads plugin __init__.py from GitHub raw URL
 - Uninstall: Removes plugin directory and clears database items
 - Rebuild: Properly clears stale items from uninstalled plugins
-- Tests: All 89 tests pass
+- Tests: All 106 tests pass (17 new for plugin repository flow)
 
 ## Commits Made
 - menu-kit-plugins: `feat: add files plugin and fix apps ID lookup`
 - menu-kit: `feat(plugins): add browse, install, and uninstall from GitHub repos`
 - menu-kit: `fix(loader): clear all items on rebuild to remove stale plugin data`
+- menu-kit: `test(plugins): add comprehensive tests for browse/install/uninstall flow`
 
 ## Key Files
 - menu-kit: `src/menu_kit/plugins/builtin/plugins.py` - browse/install/uninstall logic
 - menu-kit: `src/menu_kit/plugins/loader.py` - index rebuild with full clear
+- menu-kit: `tests/test_plugin_repository.py` - comprehensive tests for plugin flow
 - menu-kit-plugins: `.github/workflows/build-index.yml` - CI to generate index.json
 
 ## Testing
