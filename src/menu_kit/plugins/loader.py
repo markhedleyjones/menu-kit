@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import importlib
 import importlib.util
 import sys
@@ -145,6 +146,28 @@ class PluginLoader:
     def get_all_plugins(self) -> dict[str, Plugin]:
         """Get all loaded plugins."""
         return self._plugins
+
+    def unregister_plugin(self, name: str) -> bool:
+        """Unregister a plugin by name.
+
+        Returns:
+            True if plugin was found and removed, False otherwise.
+        """
+        if name not in self._plugins:
+            return False
+
+        # Call teardown before removing
+        plugin = self._plugins[name]
+        ctx = self._contexts.get(name)
+        if ctx:
+            with contextlib.suppress(Exception):
+                plugin.teardown(ctx)
+
+        del self._plugins[name]
+        if name in self._contexts:
+            del self._contexts[name]
+
+        return True
 
     def run_plugin(self, name: str, action: str = "") -> bool:
         """Run a plugin by name.

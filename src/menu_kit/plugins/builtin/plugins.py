@@ -358,14 +358,16 @@ class PluginsPlugin(Plugin):
         # Also check for symlinks
         if target_dir.is_symlink():
             target_dir.unlink()
-            # Clear items from database
+            # Clear items from database and unregister from loader
             ctx.database.delete_items_by_plugin(plugin_name)
+            ctx.unregister_plugin(plugin_name)
             return True
 
         if target_dir.exists() and target_dir.is_dir():
             shutil.rmtree(target_dir)
-            # Clear items from database
+            # Clear items from database and unregister from loader
             ctx.database.delete_items_by_plugin(plugin_name)
+            ctx.unregister_plugin(plugin_name)
             return True
 
         return False

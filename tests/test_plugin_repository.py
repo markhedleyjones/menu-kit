@@ -502,6 +502,9 @@ class TestPluginUninstallFlow:
         class MockCtx:
             database = Database(temp_dir / "test.db")
 
+            def unregister_plugin(self, name: str) -> bool:
+                return True
+
         result = plugin._uninstall_plugin(MockCtx(), "uninstall-test")
 
         assert result is True
@@ -526,12 +529,162 @@ class TestPluginUninstallFlow:
         class MockCtx:
             database = Database(temp_dir / "test.db")
 
+            def unregister_plugin(self, name: str) -> bool:
+                return True
+
         result = plugin._uninstall_plugin(MockCtx(), "symlink-test")
 
         assert result is True
         assert not symlink.exists()
         # Source should still exist
         assert source_dir.exists()
+
+
+class TestUninstallViaMenu:
+    """Tests for uninstalling plugins through the menu interface."""
+
+    def test_uninstall_removes_plugin_from_installed_list(
+        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """After uninstalling, plugin no longer appears in installed list."""
+        from menu_kit.plugins.base import PluginInfo
+
+        # Create a fake plugin that can be uninstalled
+        plugins_dir = get_data_dir() / "plugins"
+        plugins_dir.mkdir(parents=True, exist_ok=True)
+        test_plugin_dir = plugins_dir / "test-uninstall"
+        test_plugin_dir.mkdir(exist_ok=True)
+        (test_plugin_dir / "__init__.py").write_text('"""Test."""\n')
+
+        # Create a mock loader that tracks registrations
+        class TrackingLoader:
+            def __init__(self) -> None:
+                self._plugins: dict[str, Plugin] = {}
+
+            def get_all_plugins(self) -> dict[str, Plugin]:
+                return self._plugins
+
+            def register(self, plugin: Plugin) -> None:
+                self._plugins[plugin.info.name] = plugin
+
+            def unregister_plugin(self, name: str) -> bool:
+                if name in self._plugins:
+                    del self._plugins[name]
+                    return True
+                return False
+
+        # Create a fake plugin object for test-uninstall
+        class FakePlugin:
+            @property
+            def info(self) -> PluginInfo:
+                return PluginInfo(name="test-uninstall", version="1.0.0")
+
+        ctx, backend = create_context(
+            temp_dir,
+            [
+                "plugins:installed",
+                "plugins:info:test-uninstall",
+                "plugins:opt:test-uninstall:uninstall",
+                "_back",  # Back to installed (should not show test-uninstall)
+                "_back",  # Back to plugins menu
+            ],
+        )
+
+        # Replace loader with tracking version
+        loader = TrackingLoader()
+        loader.register(SettingsPlugin())
+        loader.register(PluginsPlugin())
+        loader.register(FakePlugin())  # type: ignore[arg-type]
+        ctx._loader = loader  # type: ignore[attr-defined]
+
+        plugin = PluginsPlugin()
+        plugin.run(ctx)
+
+        # Verify uninstall notification shown
+        captured = capsys.readouterr()
+        assert "uninstalled" in captured.out.lower()
+
+        # Verify plugin is no longer in loader
+        assert "test-uninstall" not in loader.get_all_plugins()
+
+        # Verify the installed list was shown again and doesn't contain test-uninstall
+        installed_menus = [
+            c for c in backend.captures if c.prompt == "Installed Plugins"
+        ]
+        assert len(installed_menus) >= 2  # Before and after uninstall
+
+        # The last installed menu should not have test-uninstall
+        last_installed = installed_menus[-1]
+        plugin_ids = [i.id for i in last_installed.items]
+        assert "plugins:info:test-uninstall" not in plugin_ids
+
+        # Cleanup
+        if test_plugin_dir.exists():
+            shutil.rmtree(test_plugin_dir)
+
+    def test_uninstall_option_shown_for_installed_plugins(self, temp_dir: Path) -> None:
+        """Installed (non-bundled) plugins show uninstall option."""
+        from menu_kit.plugins.base import PluginInfo
+
+        # Create a fake plugin
+        plugins_dir = get_data_dir() / "plugins"
+        plugins_dir.mkdir(parents=True, exist_ok=True)
+        test_plugin_dir = plugins_dir / "my-plugin"
+        test_plugin_dir.mkdir(exist_ok=True)
+        (test_plugin_dir / "__init__.py").write_text('"""Test."""\n')
+
+        class FakePlugin:
+            @property
+            def info(self) -> PluginInfo:
+                return PluginInfo(name="my-plugin", version="1.0.0")
+
+        class TrackingLoader:
+            def __init__(self) -> None:
+                self._plugins: dict[str, Plugin] = {}
+
+            def get_all_plugins(self) -> dict[str, Plugin]:
+                return self._plugins
+
+            def register(self, plugin: Plugin) -> None:
+                self._plugins[plugin.info.name] = plugin
+
+            def unregister_plugin(self, name: str) -> bool:
+                if name in self._plugins:
+                    del self._plugins[name]
+                    return True
+                return False
+
+        ctx, backend = create_context(
+            temp_dir,
+            [
+                "plugins:installed",
+                "plugins:info:my-plugin",
+                "_back",
+                "_back",
+                "_back",
+            ],
+        )
+
+        loader = TrackingLoader()
+        loader.register(SettingsPlugin())
+        loader.register(PluginsPlugin())
+        loader.register(FakePlugin())  # type: ignore[arg-type]
+        ctx._loader = loader  # type: ignore[attr-defined]
+
+        plugin = PluginsPlugin()
+        plugin.run(ctx)
+
+        # Find the plugin options menu
+        options_menus = [c for c in backend.captures if c.prompt == "My-Plugin"]
+        assert len(options_menus) == 1
+
+        options_menu = options_menus[0]
+        uninstall_items = [i for i in options_menu.items if ":uninstall" in i.id]
+        assert len(uninstall_items) == 1
+
+        # Cleanup
+        if test_plugin_dir.exists():
+            shutil.rmtree(test_plugin_dir)
 
 
 class TestRealNetworkIntegration:

@@ -91,6 +91,20 @@ class PluginContext:
             return {}
         return {name: plugin.info for name, plugin in loader.get_all_plugins().items()}
 
+    def unregister_plugin(self, name: str) -> bool:
+        """Unregister a plugin from the loader.
+
+        This removes the plugin from the active plugins list, typically
+        called after uninstalling a plugin.
+
+        Returns:
+            True if plugin was found and removed, False otherwise.
+        """
+        loader: PluginLoader | None = getattr(self, "_loader", None)
+        if loader is None:
+            return False
+        return loader.unregister_plugin(name)
+
 
 @dataclass
 class PluginInfo:

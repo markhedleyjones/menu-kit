@@ -1,0 +1,21 @@
+
+File: src/menu_kit/plugins/loader.py
+Issues:
+=== Linter: ruff ===
+SIM105 Use `contextlib.suppress(Exception)` instead of `try`-`except`-`pass`
+   --> src/menu_kit/plugins/loader.py:162:13
+    |
+160 |           ctx = self._contexts.get(name)
+161 |           if ctx:
+162 | /             try:
+163 | |                 plugin.teardown(ctx)
+164 | |             except Exception:
+165 | |                 pass  # Ignore teardown errors
+    | |____________________^
+166 |
+167 |           del self._plugins[name]
+    |
+help: Replace `try`-`except`-`pass` with `with contextlib.suppress(Exception): ...`
+
+Found 1 error.
+---
