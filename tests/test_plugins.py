@@ -34,7 +34,7 @@ def test_plugin_context_menu_with_back_button(
     assert display_items[0].id == "item1"
     assert display_items[1].id == "item2"
     assert display_items[2].id == "_back"
-    assert display_items[2].title == "← Back"
+    assert display_items[2].title == "Back"
 
 
 def test_plugin_context_menu_without_back_button(
@@ -66,7 +66,7 @@ def test_plugin_context_menu_back_returns_none(
 ) -> None:
     """Test that selecting back button returns None."""
     mock_backend = MagicMock()
-    back_item = MenuItem(id="_back", title="← Back", item_type=ItemType.ACTION)
+    back_item = MenuItem(id="_back", title="Back", item_type=ItemType.ACTION)
     mock_backend.show.return_value = MenuResult(cancelled=False, selected=back_item)
 
     ctx = PluginContext(config=config, database=database, menu_backend=mock_backend)

@@ -42,13 +42,17 @@ class MenuBackend(ABC):
         """Display menu and return the selection."""
         ...
 
-    def format_item(self, item: MenuItem, config_prefix: str = "→ ") -> str:
-        """Format a menu item for display."""
-        prefix = ""
+    def format_item(self, item: MenuItem) -> str:
+        """Format a menu item for display with consistent gutter."""
+        # Gutter icons (2 chars wide for alignment)
         if item.item_type == ItemType.SUBMENU:
-            prefix = config_prefix
+            gutter = "→ "
+        elif item.id == "_back":
+            gutter = "← "
+        else:
+            gutter = "  "
 
-        text = f"{prefix}{item.title}"
+        text = f"{gutter}{item.title}"
 
         if item.badge:
             text = f"{text}  ({item.badge})"

@@ -48,7 +48,7 @@ class PluginContext:
         if show_back:
             back_item = MenuItem(
                 id="_back",
-                title="← Back",
+                title="Back",
                 item_type=ItemType.ACTION,
             )
             display_items.append(back_item)
