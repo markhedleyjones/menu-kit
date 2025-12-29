@@ -11,20 +11,29 @@ All plugin repository functionality is working end-to-end.
 4. [x] Test install flow (download plugin from GitHub)
 5. [x] Test uninstall flow
 6. [x] Fix test failures (tests now handle both network/no-network cases)
-7. [x] Commit final changes to menu-kit
+7. [x] Fix loader to clear ALL items on rebuild (not just loaded plugins)
+8. [x] Commit all changes to menu-kit
 
 ## What Works
 - Browse: Fetches index.json from GitHub, shows available plugins
 - Install: Downloads plugin __init__.py from GitHub raw URL
 - Uninstall: Removes plugin directory and clears database items
+- Rebuild: Properly clears stale items from uninstalled plugins
 - Tests: All 89 tests pass
+
+## Commits Made
+- menu-kit-plugins: `feat: add files plugin and fix apps ID lookup`
+- menu-kit: `feat(plugins): add browse, install, and uninstall from GitHub repos`
+- menu-kit: `fix(loader): clear all items on rebuild to remove stale plugin data`
 
 ## Key Files
 - menu-kit: `src/menu_kit/plugins/builtin/plugins.py` - browse/install/uninstall logic
+- menu-kit: `src/menu_kit/plugins/loader.py` - index rebuild with full clear
 - menu-kit-plugins: `.github/workflows/build-index.yml` - CI to generate index.json
 
 ## Testing
 ```bash
 menu-kit --print  # Shows installed plugins' items
 menu-kit -p plugins:browse  # Direct to browse menu
+menu-kit --rebuild  # Rebuild index (clears stale items)
 ```
