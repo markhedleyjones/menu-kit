@@ -62,21 +62,27 @@ class MenuBackend(ABC):
 
 def get_available_backends() -> list[type[MenuBackend]]:
     """Get all available menu backend classes."""
+    from menu_kit.menu.dmenu import DmenuBackend
+    from menu_kit.menu.fuzzel import FuzzelBackend
     from menu_kit.menu.fzf import FzfBackend
     from menu_kit.menu.rofi import RofiBackend
     from menu_kit.menu.stdout import StdoutBackend
 
-    return [RofiBackend, FzfBackend, StdoutBackend]
+    return [RofiBackend, DmenuBackend, FuzzelBackend, FzfBackend, StdoutBackend]
 
 
 def get_backend(name: str | None = None) -> MenuBackend | None:
     """Get a menu backend by name, or auto-detect."""
+    from menu_kit.menu.dmenu import DmenuBackend
+    from menu_kit.menu.fuzzel import FuzzelBackend
     from menu_kit.menu.fzf import FzfBackend
     from menu_kit.menu.rofi import RofiBackend
     from menu_kit.menu.stdout import StdoutBackend
 
     backends: dict[str, type[MenuBackend]] = {
         "rofi": RofiBackend,
+        "dmenu": DmenuBackend,
+        "fuzzel": FuzzelBackend,
         "fzf": FzfBackend,
         "stdout": StdoutBackend,
     }
@@ -89,8 +95,9 @@ def get_backend(name: str | None = None) -> MenuBackend | None:
                 return backend
         return None
 
-    # Auto-detect: try each in order
-    for backend_class in [RofiBackend, FzfBackend, StdoutBackend]:
+    # Auto-detect priority: rofi → dmenu → fuzzel → fzf → stdout
+    priority = [RofiBackend, DmenuBackend, FuzzelBackend, FzfBackend, StdoutBackend]
+    for backend_class in priority:
         backend = backend_class()
         if backend.is_available():
             return backend

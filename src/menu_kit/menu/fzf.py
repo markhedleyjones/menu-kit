@@ -37,7 +37,7 @@ class FzfBackend(MenuBackend):
         input_text = "\n".join(lines)
 
         # Build command
-        cmd = ["fzf", "--reverse"]
+        cmd = ["fzf", "--reverse", "--no-preview"]
         if prompt:
             cmd.extend(["--prompt", f"{prompt}: "])
 
