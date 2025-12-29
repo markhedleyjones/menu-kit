@@ -37,7 +37,7 @@ class RofiBackend(MenuBackend):
         input_text = "\n".join(lines)
 
         # Build command
-        cmd = ["rofi", "-dmenu"]
+        cmd = ["rofi", "-dmenu", "-i"]  # -i for case-insensitive matching
         if prompt:
             cmd.extend(["-p", prompt])
 

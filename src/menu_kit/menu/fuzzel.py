@@ -35,7 +35,7 @@ class FuzzelBackend(MenuBackend):
 
         input_text = "\n".join(lines)
 
-        cmd = ["fuzzel", "--dmenu"]
+        cmd = ["fuzzel", "--dmenu"]  # case-insensitive by default
         if prompt:
             cmd.extend(["--prompt", f"{prompt}: "])
 
