@@ -188,7 +188,11 @@ class Runner:
 
         items = self.database.get_items(order_by_frequency=True)
 
-        result = self.backend.show(items, prompt="")
+        if not items:
+            print("No items in menu. Install plugins with: menu-kit -p plugins")
+            return EXIT_CANCELLED
+
+        result = self.backend.show(items, prompt="menu-kit")
 
         if result.cancelled or result.selected is None:
             return EXIT_CANCELLED
