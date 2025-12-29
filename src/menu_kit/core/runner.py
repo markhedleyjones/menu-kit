@@ -188,7 +188,8 @@ class Runner:
         assert self.database is not None
         assert self.config is not None
 
-        items = self.database.get_items(order_by_frequency=True)
+        display_manager = DisplayModeManager(self.config, self.database)
+        items = self._build_main_menu(display_manager)
         prefix = self.config.display.submenu_prefix
 
         for item in items:
@@ -244,8 +245,12 @@ class Runner:
         """Build the main menu respecting display modes."""
         assert self.database is not None
         assert self.loader is not None
+        assert self.config is not None
 
-        all_items = self.database.get_items(order_by_frequency=True)
+        sort = self.config.display.sort
+        order_by_freq = sort == "frequency"
+        all_items = self.database.get_items(order_by_frequency=order_by_freq)
+
         result: list[MenuItem] = []
         submenu_plugins: dict[str, int] = {}  # plugin_name -> item_count
 
@@ -254,14 +259,31 @@ class Runner:
                 result.append(item)
                 continue
 
+            # SUBMENU items always show as submenus (e.g., Settings, Plugins, Files)
+            if item.item_type == ItemType.SUBMENU:
+                result.append(item)
+                continue
+
             mode = display_manager.get_mode(item.plugin)
 
             if mode == DisplayMode.INLINE:
-                # Add prefix for inline items
-                item.title = display_manager.format_inline_title(
-                    item.plugin, item.title
+                # Create new item with prefixed title (don't mutate original)
+                result.append(
+                    MenuItem(
+                        id=item.id,
+                        title=display_manager.format_inline_title(
+                            item.plugin, item.title
+                        ),
+                        item_type=item.item_type,
+                        path=item.path,
+                        plugin=item.plugin,
+                        metadata=item.metadata,
+                        icon=item.icon,
+                        badge=item.badge,
+                        use_count=item.use_count,
+                        last_used=item.last_used,
+                    )
                 )
-                result.append(item)
             else:
                 # Track plugin for submenu entry
                 submenu_plugins[item.plugin] = submenu_plugins.get(item.plugin, 0) + 1
@@ -281,7 +303,29 @@ class Runner:
                 )
             )
 
+        # Apply sorting
+        result = self._sort_menu_items(result, sort)
+
+        # Put submenus first if configured
+        if self.config.display.submenus_first:
+            submenus = [i for i in result if i.item_type == ItemType.SUBMENU]
+            others = [i for i in result if i.item_type != ItemType.SUBMENU]
+            result = submenus + others
+
         return result
+
+    def _sort_menu_items(self, items: list[MenuItem], sort: str) -> list[MenuItem]:
+        """Sort menu items according to the configured mode."""
+        if sort == "frequency":
+            # Already sorted by frequency from database query
+            return items
+        elif sort == "alpha":
+            return sorted(items, key=lambda x: x.title.lower())
+        elif sort == "length":
+            # Sort by title length, then alphabetically
+            return sorted(items, key=lambda x: (len(x.title), x.title.lower()))
+        else:
+            return items
 
     def _show_plugin_submenu(
         self, plugin_name: str, display_manager: DisplayModeManager

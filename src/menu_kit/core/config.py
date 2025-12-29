@@ -55,6 +55,8 @@ class DisplayConfig:
     show_info_items: bool = True
     show_headers: bool = True
     show_separators: bool = True
+    sort: str = "alpha"  # "alpha", "frequency", "length"
+    submenus_first: bool = True
 
 
 @dataclass
@@ -118,6 +120,8 @@ class Config:
             show_info_items=display_data.get("show_info_items", True),
             show_headers=display_data.get("show_headers", True),
             show_separators=display_data.get("show_separators", True),
+            sort=display_data.get("sort", "alpha"),
+            submenus_first=display_data.get("submenus_first", True),
         )
 
         plugins_data = data.get("plugins", {})
@@ -183,6 +187,10 @@ class Config:
             display_lines.append("show_headers = false")
         if not self.display.show_separators:
             display_lines.append("show_separators = false")
+        if self.display.sort != "alpha":
+            display_lines.append(f'sort = "{self.display.sort}"')
+        if not self.display.submenus_first:
+            display_lines.append("submenus_first = false")
 
         if display_lines:
             lines.append("[display]")
