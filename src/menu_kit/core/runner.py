@@ -180,37 +180,37 @@ class Runner:
         return EXIT_SUCCESS
 
     def _run_menu(self) -> int:
-        """Run the interactive menu."""
+        """Run the interactive menu loop."""
         assert self.database is not None
         assert self.backend is not None
         assert self.config is not None
         assert self.loader is not None
 
-        items = self.database.get_items(order_by_frequency=True)
+        while True:
+            items = self.database.get_items(order_by_frequency=True)
 
-        if not items:
-            print("No items in menu. Install plugins with: menu-kit -p plugins")
-            return EXIT_CANCELLED
+            if not items:
+                print("No items in menu. Install plugins with: menu-kit -p plugins")
+                return EXIT_CANCELLED
 
-        result = self.backend.show(items, prompt="menu-kit")
+            result = self.backend.show(items, prompt="menu-kit")
 
-        if result.cancelled or result.selected is None:
-            return EXIT_CANCELLED
+            # Exit only when cancelled from main menu
+            if result.cancelled or result.selected is None:
+                return EXIT_CANCELLED
 
-        item = result.selected
+            item = result.selected
 
-        # Record usage
-        if self.config.frequency_tracking:
-            self.database.record_use(item.id)
+            # Record usage
+            if self.config.frequency_tracking:
+                self.database.record_use(item.id)
 
-        # Execute
-        if item.plugin:
-            action = ""
-            if ":" in item.id:
-                _, action = item.id.split(":", 1)
-            self.loader.run_plugin(item.plugin, action)
-
-        return EXIT_SUCCESS
+            # Execute plugin and loop back to main menu
+            if item.plugin:
+                action = ""
+                if ":" in item.id:
+                    _, action = item.id.split(":", 1)
+                self.loader.run_plugin(item.plugin, action)
 
     def _format_item(self, item: MenuItem, prefix: str) -> str:
         """Format an item for display."""
