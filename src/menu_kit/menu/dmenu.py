@@ -60,7 +60,15 @@ class DmenuBackend(MenuBackend):
         if not selected_text:
             return MenuResult(selected=None, cancelled=True)
 
+        # Try exact match first
         selected_item = item_map.get(selected_text)
+
+        # Fallback: dmenu may strip leading whitespace, try matching stripped keys
+        if selected_item is None:
+            for key, item in item_map.items():
+                if key.strip() == selected_text:
+                    selected_item = item
+                    break
 
         return MenuResult(
             selected=selected_item,

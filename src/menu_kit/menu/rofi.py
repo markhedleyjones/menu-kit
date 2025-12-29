@@ -25,19 +25,17 @@ class RofiBackend(MenuBackend):
         extra_args: list[str] | None = None,
     ) -> MenuResult:
         """Display menu using rofi and return selection."""
-        # Build the input
-        item_map: dict[str, MenuItem] = {}
         lines: list[str] = []
 
         for item in items:
             display_text = self.format_item(item)
             lines.append(display_text)
-            item_map[display_text] = item
 
         input_text = "\n".join(lines)
 
-        # Build command
-        cmd = ["rofi", "-dmenu", "-i"]  # -i for case-insensitive matching
+        # Build command - use format i to return index instead of text
+        # (rofi strips leading whitespace from output, breaking gutter alignment)
+        cmd = ["rofi", "-dmenu", "-i", "-format", "i"]
         if prompt:
             cmd.extend(["-p", prompt])
 
@@ -60,15 +58,19 @@ class RofiBackend(MenuBackend):
         if result.returncode != 0:
             return MenuResult(selected=None, cancelled=True)
 
-        selected_text = result.stdout.strip()
-        if not selected_text:
+        index_str = result.stdout.strip()
+        if not index_str:
             return MenuResult(selected=None, cancelled=True)
 
-        # Find the selected item
-        selected_item = item_map.get(selected_text)
+        # Look up by index
+        try:
+            index = int(index_str)
+            selected_item = items[index]
+        except (ValueError, IndexError):
+            return MenuResult(selected=None, cancelled=True)
 
         return MenuResult(
             selected=selected_item,
-            raw_text=selected_text,
+            raw_text=lines[index] if index < len(lines) else None,
             cancelled=False,
         )
