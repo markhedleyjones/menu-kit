@@ -477,6 +477,7 @@ class TestNavigationPaths:
                 "plugins:repo:markhedleyjones/menu-kit-plugins",
                 "_back",
                 "_back",
+                "_back",
             ],
         )
         plugin = PluginsPlugin()
@@ -484,11 +485,13 @@ class TestNavigationPaths:
         plugin.run(ctx)
 
         prompts = [c.prompt for c in backend.captures]
-        assert prompts == [
-            "Plugins",
-            "Browse Plugins",
-            "Browse Plugins",  # After repo selection (shows notify, loops)
-            "Plugins",
+        # With network: fetches index and shows repo plugins menu
+        # Without network: shows notification and stays in Browse menu
+        assert prompts in [
+            # Network available - shows repo plugins (Official) then back out
+            ["Plugins", "Browse Plugins", "Official", "Browse Plugins", "Plugins"],
+            # Network unavailable - shows notification, stays in browse
+            ["Plugins", "Browse Plugins", "Browse Plugins", "Plugins"],
         ]
 
 
@@ -589,15 +592,16 @@ class TestMenuItemBehavior:
         captured = capsys.readouterr()
         assert "display mode" in captured.out.lower()
 
-    def test_plugins_browse_repo_shows_notification(
+    def test_plugins_browse_repo_shows_plugins_or_error(
         self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Selecting a repository in Browse shows appropriate notification."""
-        ctx, _ = create_context(
+        """Selecting a repository shows plugins menu or error notification."""
+        ctx, backend = create_context(
             temp_dir,
             [
                 "plugins:browse",
                 "plugins:repo:markhedleyjones/menu-kit-plugins",
+                "_back",
                 "_back",
                 "_back",
             ],
@@ -607,7 +611,11 @@ class TestMenuItemBehavior:
         plugin.run(ctx)
 
         captured = capsys.readouterr()
-        assert "repository" in captured.out.lower() or "not yet" in captured.out.lower()
+        prompts = [c.prompt for c in backend.captures]
+        # Either shows error notification (no network) or shows repo menu (network ok)
+        has_error = "failed" in captured.out.lower() or "fetch" in captured.out.lower()
+        shows_repo_menu = "Official" in prompts
+        assert has_error or shows_repo_menu
 
     def test_settings_frequency_badge_reflects_config(self, temp_dir: Path) -> None:
         """Frequency Tracking item shows current config state in badge."""

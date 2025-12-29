@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import shutil
+import urllib.request
+from typing import Any
+
+from menu_kit.core.config import get_data_dir
 from menu_kit.core.database import ItemType, MenuItem
 from menu_kit.core.display_mode import DisplayMode, DisplayModeManager
 from menu_kit.plugins.base import Plugin, PluginContext, PluginInfo
@@ -160,7 +166,11 @@ class PluginsPlugin(Plugin):
                 display_manager.set_mode(plugin_name, new_mode)
                 ctx.notify(f"Display mode changed to {new_mode.value}")
             elif selected.id.endswith(":uninstall"):
-                ctx.notify("Uninstall not yet implemented")
+                if self._uninstall_plugin(ctx, plugin_name):
+                    ctx.notify(f"Uninstalled {plugin_name}")
+                    return  # Go back to installed list
+                else:
+                    ctx.notify(f"Failed to uninstall {plugin_name}")
 
     # Official repository identifier
     OFFICIAL_REPO = "markhedleyjones/menu-kit-plugins"
@@ -193,7 +203,172 @@ class PluginsPlugin(Plugin):
                 return
 
             if selected.id.startswith("plugins:repo:"):
-                ctx.notify("Repository browsing not yet implemented")
+                repo = selected.id.replace("plugins:repo:", "")
+                self._show_repo_plugins(ctx, repo)
+
+    def _fetch_repo_index(self, repo: str) -> dict[str, Any] | None:
+        """Fetch index.json from a GitHub repository."""
+        url = f"https://raw.githubusercontent.com/{repo}/main/index.json"
+        try:
+            with urllib.request.urlopen(url, timeout=10) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except Exception:
+            return None
+
+    def _show_repo_plugins(self, ctx: PluginContext, repo: str) -> None:
+        """Show plugins available in a repository."""
+        index = self._fetch_repo_index(repo)
+        if index is None:
+            ctx.notify(f"Failed to fetch plugins from {repo}")
+            return
+
+        installed = ctx.get_installed_plugins()
+
+        while True:
+            items = []
+            plugins = index.get("plugins", {})
+
+            for name, info in sorted(plugins.items()):
+                is_installed = name in installed
+                badge = f"v{info.get('version', '?')}"
+                if is_installed:
+                    badge += " (installed)"
+
+                items.append(
+                    MenuItem(
+                        id=f"plugins:available:{repo}:{name}",
+                        title=name,
+                        item_type=ItemType.ACTION,
+                        badge=badge,
+                        metadata={"repo": repo, "info": info},
+                    )
+                )
+
+            if not items:
+                items.append(
+                    MenuItem(
+                        id="plugins:browse:empty",
+                        title="No plugins available",
+                        item_type=ItemType.INFO,
+                    )
+                )
+
+            title = "Official" if repo == self.OFFICIAL_REPO else repo
+            selected = ctx.menu(items, prompt=title)
+            if selected is None:
+                return
+
+            if selected.id.startswith("plugins:available:"):
+                parts = selected.id.split(":", 3)
+                plugin_name = parts[3]
+                plugin_info = plugins.get(plugin_name, {})
+                self._show_plugin_install_options(
+                    ctx, repo, plugin_name, plugin_info, plugin_name in installed
+                )
+
+    def _show_plugin_install_options(
+        self,
+        ctx: PluginContext,
+        repo: str,
+        plugin_name: str,
+        plugin_info: dict[str, Any],
+        is_installed: bool,
+    ) -> None:
+        """Show install/info options for a plugin."""
+        while True:
+            items = [
+                MenuItem(
+                    id=f"plugins:detail:{plugin_name}:desc",
+                    title=plugin_info.get("description", "No description"),
+                    item_type=ItemType.INFO,
+                ),
+            ]
+
+            if is_installed:
+                items.append(
+                    MenuItem(
+                        id=f"plugins:detail:{plugin_name}:installed",
+                        title="Already installed",
+                        item_type=ItemType.INFO,
+                    )
+                )
+            else:
+                items.append(
+                    MenuItem(
+                        id=f"plugins:detail:{plugin_name}:install",
+                        title="Install",
+                        item_type=ItemType.ACTION,
+                    )
+                )
+
+            selected = ctx.menu(items, prompt=plugin_name.title())
+            if selected is None:
+                return
+
+            if selected.id.endswith(":install"):
+                if self._install_plugin(ctx, repo, plugin_name, plugin_info):
+                    ctx.notify(f"Installed {plugin_name}")
+                    return
+                else:
+                    ctx.notify(f"Failed to install {plugin_name}")
+
+    def _install_plugin(
+        self,
+        ctx: PluginContext,
+        repo: str,
+        plugin_name: str,
+        plugin_info: dict[str, Any],
+    ) -> bool:
+        """Download and install a plugin from a repository."""
+        plugins_dir = get_data_dir() / "plugins"
+        plugins_dir.mkdir(parents=True, exist_ok=True)
+
+        target_dir = plugins_dir / plugin_name
+        if target_dir.exists():
+            return False  # Already exists
+
+        # Get download path from index
+        download_path = plugin_info.get("download", f"plugins/{plugin_name}")
+
+        # Download __init__.py (main plugin file)
+        base_url = f"https://raw.githubusercontent.com/{repo}/main/{download_path}"
+        init_url = f"{base_url}/__init__.py"
+
+        try:
+            # Create plugin directory
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            # Download main file
+            init_path = target_dir / "__init__.py"
+            with urllib.request.urlopen(init_url, timeout=30) as response:
+                init_path.write_bytes(response.read())
+
+            return True
+        except Exception:
+            # Clean up on failure
+            if target_dir.exists():
+                shutil.rmtree(target_dir)
+            return False
+
+    def _uninstall_plugin(self, ctx: PluginContext, plugin_name: str) -> bool:
+        """Uninstall a plugin by removing its directory."""
+        plugins_dir = get_data_dir() / "plugins"
+        target_dir = plugins_dir / plugin_name
+
+        # Also check for symlinks
+        if target_dir.is_symlink():
+            target_dir.unlink()
+            # Clear items from database
+            ctx.database.delete_items_by_plugin(plugin_name)
+            return True
+
+        if target_dir.exists() and target_dir.is_dir():
+            shutil.rmtree(target_dir)
+            # Clear items from database
+            ctx.database.delete_items_by_plugin(plugin_name)
+            return True
+
+        return False
 
     def index(self, ctx: PluginContext) -> list[MenuItem]:
         """Register plugins menu in main menu."""
