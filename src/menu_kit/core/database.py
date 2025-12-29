@@ -243,6 +243,15 @@ class Database:
             cursor = conn.execute("DELETE FROM items")
             return cursor.rowcount
 
+    def get_item_counts_by_plugin(self) -> dict[str, int]:
+        """Get count of items per plugin."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT plugin, COUNT(*) as count FROM items "
+                "WHERE plugin IS NOT NULL GROUP BY plugin"
+            ).fetchall()
+            return {row["plugin"]: row["count"] for row in rows}
+
     def record_use(self, item_id: str) -> None:
         """Record that an item was used."""
         now = datetime.now().isoformat()

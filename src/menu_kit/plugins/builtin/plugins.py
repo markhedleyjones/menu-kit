@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from menu_kit.core.database import ItemType, MenuItem
+from menu_kit.core.display_mode import DisplayMode, DisplayModeManager
 from menu_kit.plugins.base import Plugin, PluginContext, PluginInfo
 
 
@@ -29,12 +30,13 @@ class PluginsPlugin(Plugin):
     def _show_main_menu(self, ctx: PluginContext) -> None:
         """Show main plugins menu."""
         while True:
+            installed_count = len(ctx.get_installed_plugins())
             items = [
                 MenuItem(
                     id="plugins:installed",
                     title="Installed",
                     item_type=ItemType.SUBMENU,
-                    badge="2",  # TODO: actual count
+                    badge=str(installed_count),
                 ),
                 MenuItem(
                     id="plugins:browse",
@@ -61,27 +63,104 @@ class PluginsPlugin(Plugin):
 
     def _show_installed(self, ctx: PluginContext) -> None:
         """Show installed plugins."""
+        display_manager = DisplayModeManager(ctx.config, ctx.database)
+
         while True:
-            items = [
-                MenuItem(
-                    id="plugins:info:settings",
-                    title="settings",
-                    item_type=ItemType.ACTION,
-                    badge="0.0.1 (bundled)",
-                ),
-                MenuItem(
-                    id="plugins:info:plugins",
-                    title="plugins",
-                    item_type=ItemType.ACTION,
-                    badge="0.0.1 (bundled)",
-                ),
-            ]
+            installed = ctx.get_installed_plugins()
+            items = []
+
+            for name, info in sorted(installed.items()):
+                # Get display mode for this plugin
+                mode = display_manager.get_mode(name)
+                mode_label = mode.value
+
+                # Determine if bundled
+                bundled_plugins = {"settings", "plugins"}
+                source = "bundled" if name in bundled_plugins else "installed"
+
+                badge = f"{info.version} ({source}) | {mode_label}"
+
+                items.append(
+                    MenuItem(
+                        id=f"plugins:info:{name}",
+                        title=name,
+                        item_type=ItemType.ACTION,
+                        badge=badge,
+                    )
+                )
 
             selected = ctx.menu(items, prompt="Installed Plugins")
             if selected is None:
                 return
 
-            ctx.notify(f"Plugin info: {selected.title}")
+            # Extract plugin name from ID
+            plugin_name = selected.id.replace("plugins:info:", "")
+            self._show_plugin_options(ctx, plugin_name, display_manager)
+
+    def _show_plugin_options(
+        self,
+        ctx: PluginContext,
+        plugin_name: str,
+        display_manager: DisplayModeManager,
+    ) -> None:
+        """Show options for a specific plugin."""
+        installed = ctx.get_installed_plugins()
+        info = installed.get(plugin_name)
+        if info is None:
+            return
+
+        while True:
+            current_mode = display_manager.get_mode(plugin_name)
+
+            # Build toggle label
+            if current_mode == DisplayMode.INLINE:
+                toggle_label = "Change to Submenu"
+                toggle_badge = "currently inline"
+            else:
+                toggle_label = "Change to Inline"
+                toggle_badge = "currently submenu"
+
+            items = [
+                MenuItem(
+                    id=f"plugins:opt:{plugin_name}:info",
+                    title="Info",
+                    item_type=ItemType.INFO,
+                    badge=f"v{info.version}",
+                ),
+                MenuItem(
+                    id=f"plugins:opt:{plugin_name}:toggle",
+                    title=toggle_label,
+                    item_type=ItemType.ACTION,
+                    badge=toggle_badge,
+                ),
+            ]
+
+            # Add uninstall option for non-bundled plugins
+            bundled_plugins = {"settings", "plugins"}
+            if plugin_name not in bundled_plugins:
+                items.append(
+                    MenuItem(
+                        id=f"plugins:opt:{plugin_name}:uninstall",
+                        title="Uninstall",
+                        item_type=ItemType.ACTION,
+                    )
+                )
+
+            selected = ctx.menu(items, prompt=plugin_name.title())
+            if selected is None:
+                return
+
+            if selected.id.endswith(":toggle"):
+                # Toggle display mode
+                new_mode = (
+                    DisplayMode.SUBMENU
+                    if current_mode == DisplayMode.INLINE
+                    else DisplayMode.INLINE
+                )
+                display_manager.set_mode(plugin_name, new_mode)
+                ctx.notify(f"Display mode changed to {new_mode.value}")
+            elif selected.id.endswith(":uninstall"):
+                ctx.notify("Uninstall not yet implemented")
 
     # Official repository identifier
     OFFICIAL_REPO = "markhedleyjones/menu-kit-plugins"

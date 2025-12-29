@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from menu_kit.core.config import Config
     from menu_kit.core.database import Database
     from menu_kit.menu.base import MenuBackend
+    from menu_kit.plugins.loader import PluginLoader
 
 
 # Sentinel for back navigation
@@ -82,6 +83,13 @@ class PluginContext:
     def register_items(self, items: list[MenuItem]) -> None:
         """Register items to appear in the main menu."""
         self.database.add_items(items)
+
+    def get_installed_plugins(self) -> dict[str, PluginInfo]:
+        """Get all installed plugins with their info."""
+        loader: PluginLoader | None = getattr(self, "_loader", None)
+        if loader is None:
+            return {}
+        return {name: plugin.info for name, plugin in loader.get_all_plugins().items()}
 
 
 @dataclass

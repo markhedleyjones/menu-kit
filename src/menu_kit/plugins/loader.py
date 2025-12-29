@@ -124,6 +124,8 @@ class PluginLoader:
         )
         # Set the plugin name so context can scope data storage
         ctx._plugin_name = name  # type: ignore[attr-defined]
+        # Set loader reference so context can list installed plugins
+        ctx._loader = self  # type: ignore[attr-defined]
         self._contexts[name] = ctx
 
         # Call setup

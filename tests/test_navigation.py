@@ -14,7 +14,7 @@ import pytest
 from menu_kit.core.config import Config
 from menu_kit.core.database import Database, MenuItem
 from menu_kit.menu.base import MenuBackend, MenuResult
-from menu_kit.plugins.base import PluginContext
+from menu_kit.plugins.base import Plugin, PluginContext
 from menu_kit.plugins.builtin.plugins import PluginsPlugin
 from menu_kit.plugins.builtin.settings import SettingsPlugin
 
@@ -72,6 +72,19 @@ class MockBackend(MenuBackend):
         return MenuResult(cancelled=True, selected=None)
 
 
+class MockLoader:
+    """Mock plugin loader for testing."""
+
+    def __init__(self) -> None:
+        self._plugins: dict[str, Plugin] = {}
+
+    def get_all_plugins(self) -> dict[str, Plugin]:
+        return self._plugins
+
+    def register(self, plugin: Plugin) -> None:
+        self._plugins[plugin.info.name] = plugin
+
+
 def create_context(
     temp_dir: Path, selections: list[str | None]
 ) -> tuple[PluginContext, MockBackend]:
@@ -80,6 +93,13 @@ def create_context(
     database = Database(temp_dir / "test.db")
     backend = MockBackend(selections=selections)
     ctx = PluginContext(config=config, database=database, menu_backend=backend)
+
+    # Set up mock loader with bundled plugins
+    loader = MockLoader()
+    loader.register(SettingsPlugin())
+    loader.register(PluginsPlugin())
+    ctx._loader = loader  # type: ignore[attr-defined]
+
     return ctx, backend
 
 
@@ -213,12 +233,13 @@ class TestPluginsNavigation:
         assert "plugins:browse:info" in item_ids
 
     def test_plugins_deep_navigation(self, temp_dir: Path) -> None:
-        """Test deep navigation: Plugins → Installed → select plugin → back → back → back."""
+        """Test deep navigation: Plugins → Installed → plugin options → back → back → back."""
         ctx, backend = create_context(
             temp_dir,
             [
                 "plugins:installed",  # Go to Installed
-                "plugins:info:settings",  # Select settings plugin (shows notify, loops)
+                "plugins:info:settings",  # Select settings plugin (shows options)
+                "_back",  # Back to Installed
                 "_back",  # Back to Plugins main
                 "_back",  # Exit plugin
             ],
@@ -231,7 +252,8 @@ class TestPluginsNavigation:
         assert prompts == [
             "Plugins",
             "Installed Plugins",
-            "Installed Plugins",  # After action, loops back to Installed
+            "Settings",  # Plugin options menu
+            "Installed Plugins",  # After back from options
             "Plugins",  # After back from Installed
         ]
 
@@ -361,27 +383,55 @@ class TestNavigationPaths:
             ),
             # Select settings plugin in Installed, then back out
             (
-                ["plugins:installed", "plugins:info:settings", "_back", "_back"],
-                ["Plugins", "Installed Plugins", "Installed Plugins", "Plugins"],
-            ),
-            # Select plugins plugin in Installed, then back out
-            (
-                ["plugins:installed", "plugins:info:plugins", "_back", "_back"],
-                ["Plugins", "Installed Plugins", "Installed Plugins", "Plugins"],
-            ),
-            # Browse both installed plugins before backing out
-            (
                 [
                     "plugins:installed",
                     "plugins:info:settings",
-                    "plugins:info:plugins",
+                    "_back",
                     "_back",
                     "_back",
                 ],
                 [
                     "Plugins",
                     "Installed Plugins",
+                    "Settings",
                     "Installed Plugins",
+                    "Plugins",
+                ],
+            ),
+            # Select plugins plugin in Installed, then back out
+            (
+                [
+                    "plugins:installed",
+                    "plugins:info:plugins",
+                    "_back",
+                    "_back",
+                    "_back",
+                ],
+                [
+                    "Plugins",
+                    "Installed Plugins",
+                    "Plugins",
+                    "Installed Plugins",
+                    "Plugins",
+                ],
+            ),
+            # Browse both installed plugins before backing out
+            (
+                [
+                    "plugins:installed",
+                    "plugins:info:settings",
+                    "_back",
+                    "plugins:info:plugins",
+                    "_back",
+                    "_back",
+                    "_back",
+                ],
+                [
+                    "Plugins",
+                    "Installed Plugins",
+                    "Settings",
+                    "Installed Plugins",
+                    "Plugins",
                     "Installed Plugins",
                     "Plugins",
                 ],
@@ -495,33 +545,49 @@ class TestMenuItemBehavior:
         captured = capsys.readouterr()
         assert "update" in captured.out.lower()
 
-    def test_plugins_installed_settings_shows_info(
+    def test_plugins_installed_settings_toggle_shows_notification(
         self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Selecting settings plugin in Installed shows plugin info."""
+        """Toggling display mode in plugin options shows notification."""
         ctx, _ = create_context(
-            temp_dir, ["plugins:installed", "plugins:info:settings", "_back", "_back"]
+            temp_dir,
+            [
+                "plugins:installed",
+                "plugins:info:settings",
+                "plugins:opt:settings:toggle",
+                "_back",
+                "_back",
+                "_back",
+            ],
         )
         plugin = PluginsPlugin()
 
         plugin.run(ctx)
 
         captured = capsys.readouterr()
-        assert "settings" in captured.out.lower()
+        assert "display mode" in captured.out.lower()
 
-    def test_plugins_installed_plugins_shows_info(
+    def test_plugins_installed_plugins_toggle_shows_notification(
         self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Selecting plugins plugin in Installed shows plugin info."""
+        """Toggling display mode in plugin options shows notification."""
         ctx, _ = create_context(
-            temp_dir, ["plugins:installed", "plugins:info:plugins", "_back", "_back"]
+            temp_dir,
+            [
+                "plugins:installed",
+                "plugins:info:plugins",
+                "plugins:opt:plugins:toggle",
+                "_back",
+                "_back",
+                "_back",
+            ],
         )
         plugin = PluginsPlugin()
 
         plugin.run(ctx)
 
         captured = capsys.readouterr()
-        assert "plugins" in captured.out.lower()
+        assert "display mode" in captured.out.lower()
 
     def test_plugins_browse_repo_shows_notification(
         self, temp_dir: Path, capsys: pytest.CaptureFixture[str]

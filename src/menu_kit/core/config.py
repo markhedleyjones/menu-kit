@@ -65,6 +65,8 @@ class PluginsConfig:
         default_factory=lambda: ["markhedleyjones/menu-kit-plugins"]
     )
     allow_unverified: bool = False
+    default_display_mode: str = "auto"  # "inline", "submenu", "auto"
+    item_threshold: int = 20  # For auto mode: >threshold items → submenu
 
 
 @dataclass
@@ -124,6 +126,8 @@ class Config:
                 "repositories", ["markhedleyjones/menu-kit-plugins"]
             ),
             allow_unverified=plugins_data.get("allow_unverified", False),
+            default_display_mode=plugins_data.get("default_display_mode", "auto"),
+            item_threshold=plugins_data.get("item_threshold", 20),
         )
 
         return cls(
@@ -191,5 +195,11 @@ class Config:
         lines.append(f"repositories = [{repos_str}]")
         if self.plugins.allow_unverified:
             lines.append("allow_unverified = true")
+        if self.plugins.default_display_mode != "auto":
+            lines.append(
+                f'default_display_mode = "{self.plugins.default_display_mode}"'
+            )
+        if self.plugins.item_threshold != 20:
+            lines.append(f"item_threshold = {self.plugins.item_threshold}")
 
         path.write_text("\n".join(lines) + "\n")

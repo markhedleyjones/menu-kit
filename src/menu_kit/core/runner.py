@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from menu_kit.core.config import Config
-from menu_kit.core.database import Database, MenuItem
+from menu_kit.core.database import Database, ItemType, MenuItem
+from menu_kit.core.display_mode import DisplayMode, DisplayModeManager
 from menu_kit.menu.base import GUI_BACKENDS, get_backend
 from menu_kit.plugins.loader import PluginLoader
 
@@ -203,8 +204,10 @@ class Runner:
         assert self.config is not None
         assert self.loader is not None
 
+        display_manager = DisplayModeManager(self.config, self.database)
+
         while True:
-            items = self.database.get_items(order_by_frequency=True)
+            items = self._build_main_menu(display_manager)
 
             if not items:
                 print("No items in menu. Install plugins with: menu-kit -p plugins")
@@ -218,21 +221,120 @@ class Runner:
 
             item = result.selected
 
+            # Handle submenu entry selection
+            if item.id.startswith("_submenu:"):
+                plugin_name = item.id[9:]  # Remove "_submenu:" prefix
+                if self._show_plugin_submenu(plugin_name, display_manager):
+                    return EXIT_SUCCESS  # Plugin was executed, exit
+                continue
+
             # Record usage
             if self.config.frequency_tracking:
                 self.database.record_use(item.id)
 
-            # Execute plugin and loop back to main menu
+            # Execute plugin and exit (launcher behavior)
             if item.plugin:
                 action = ""
                 if ":" in item.id:
                     _, action = item.id.split(":", 1)
                 self.loader.run_plugin(item.plugin, action)
+                return EXIT_SUCCESS
+
+    def _build_main_menu(self, display_manager: DisplayModeManager) -> list[MenuItem]:
+        """Build the main menu respecting display modes."""
+        assert self.database is not None
+        assert self.loader is not None
+
+        all_items = self.database.get_items(order_by_frequency=True)
+        result: list[MenuItem] = []
+        submenu_plugins: dict[str, int] = {}  # plugin_name -> item_count
+
+        for item in all_items:
+            if not item.plugin:
+                result.append(item)
+                continue
+
+            mode = display_manager.get_mode(item.plugin)
+
+            if mode == DisplayMode.INLINE:
+                # Add prefix for inline items
+                item.title = display_manager.format_inline_title(
+                    item.plugin, item.title
+                )
+                result.append(item)
+            else:
+                # Track plugin for submenu entry
+                submenu_plugins[item.plugin] = submenu_plugins.get(item.plugin, 0) + 1
+
+        # Add submenu entries for plugins in submenu mode
+        for plugin_name, count in submenu_plugins.items():
+            plugin = self.loader.get_plugin(plugin_name)
+            title = plugin.info.name.title() if plugin else plugin_name.title()
+
+            result.append(
+                MenuItem(
+                    id=f"_submenu:{plugin_name}",
+                    title=title,
+                    item_type=ItemType.SUBMENU,
+                    plugin=plugin_name,
+                    badge=f"{count} items",
+                )
+            )
+
+        return result
+
+    def _show_plugin_submenu(
+        self, plugin_name: str, display_manager: DisplayModeManager
+    ) -> bool:
+        """Show items for a plugin in submenu mode.
+
+        Returns:
+            True if a plugin was executed (caller should exit),
+            False if cancelled/back (caller should continue).
+        """
+        assert self.database is not None
+        assert self.backend is not None
+        assert self.config is not None
+        assert self.loader is not None
+
+        plugin = self.loader.get_plugin(plugin_name)
+        prompt = plugin.info.name.title() if plugin else plugin_name.title()
+
+        while True:
+            items = self.database.get_items(plugin=plugin_name, order_by_frequency=True)
+
+            if not items:
+                return False
+
+            # Add back button
+            items.append(MenuItem(id="_back", title="Back", item_type=ItemType.ACTION))
+
+            result = self.backend.show(items, prompt=prompt)
+
+            if result.cancelled or result.selected is None:
+                return False
+
+            if result.selected.id == "_back":
+                return False
+
+            item = result.selected
+
+            # Record usage
+            if self.config.frequency_tracking:
+                self.database.record_use(item.id)
+
+            # Execute and exit
+            if item.plugin:
+                action = ""
+                if ":" in item.id:
+                    _, action = item.id.split(":", 1)
+                self.loader.run_plugin(item.plugin, action)
+                return True  # Signal to exit menu
+
+            return False
 
     def _format_item(self, item: MenuItem, prefix: str) -> str:
         """Format an item for display."""
-        from menu_kit.core.database import ItemType
-
         display = item.title
         if item.item_type == ItemType.SUBMENU:
             display = f"{prefix}{display}"
