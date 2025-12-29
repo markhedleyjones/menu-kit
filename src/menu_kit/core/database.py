@@ -237,6 +237,12 @@ class Database:
             cursor = conn.execute("DELETE FROM items WHERE plugin = ?", (plugin,))
             return cursor.rowcount
 
+    def clear_items(self) -> int:
+        """Delete all items. Returns count deleted."""
+        with self._connect() as conn:
+            cursor = conn.execute("DELETE FROM items")
+            return cursor.rowcount
+
     def record_use(self, item_id: str) -> None:
         """Record that an item was used."""
         now = datetime.now().isoformat()
