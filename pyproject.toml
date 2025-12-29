@@ -61,3 +61,6 @@ warn_unused_configs = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v"
+markers = [
+    "network: tests that require network access (deselect with '-m \"not network\"')",
+]
