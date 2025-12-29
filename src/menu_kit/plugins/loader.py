@@ -175,15 +175,15 @@ class PluginLoader:
 
     def index_all(self) -> None:
         """Rebuild the index from all plugins."""
+        # Clear all items first (removes stale items from uninstalled plugins)
+        self.database.clear_items()
+
         for name, plugin in self._plugins.items():
             ctx = self._contexts.get(name)
             if ctx is None:
                 continue
 
             try:
-                # Clear old items for this plugin
-                self.database.delete_items_by_plugin(name)
-
                 # Get new items
                 items = plugin.index(ctx)
 
