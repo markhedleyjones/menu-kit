@@ -11,7 +11,6 @@ These tests verify the complete plugin management flow:
 from __future__ import annotations
 
 import contextlib
-import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -19,7 +18,7 @@ from unittest.mock import patch
 
 import pytest
 
-from menu_kit.core.config import Config, get_data_dir
+from menu_kit.core.config import Config
 from menu_kit.core.database import Database, ItemType, MenuItem
 from menu_kit.menu.base import MenuBackend, MenuResult
 from menu_kit.plugins.base import MenuCancelled, Plugin, PluginContext
@@ -278,7 +277,9 @@ class TestPluginInstallScreen:
 class TestPluginInstallFlow:
     """Tests for actually installing plugins."""
 
-    def test_install_plugin_creates_directory(self, temp_dir: Path) -> None:
+    def test_install_plugin_creates_directory(
+        self, temp_dir: Path, sandbox_environment: Path
+    ) -> None:
         """Installing a plugin creates the plugin directory."""
         from unittest.mock import MagicMock
 
@@ -309,17 +310,16 @@ class TestPluginInstallFlow:
             )
 
         assert result is True
-        plugin_dir = get_data_dir() / "plugins" / "my-plugin"
+        # Use sandboxed data directory
+        data_dir = sandbox_environment / "data"
+        plugin_dir = data_dir / "plugins" / "my-plugin"
         assert plugin_dir.exists()
         assert (plugin_dir / "__init__.py").exists()
 
-        # Cleanup
-        shutil.rmtree(plugin_dir)
-
-    def test_install_shows_success_notification(
-        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+    def test_install_shows_result_screen(
+        self, temp_dir: Path, sandbox_environment: Path
     ) -> None:
-        """Installing a plugin shows success notification."""
+        """Installing a plugin shows result screen."""
         from unittest.mock import MagicMock
 
         ctx, backend = create_context(
@@ -328,6 +328,7 @@ class TestPluginInstallFlow:
                 "plugins:browse",
                 "plugins:available:markhedleyjones/menu-kit-plugins:test-plugin",
                 "plugins:detail:test-plugin:install",
+                "_done",  # Dismiss result screen
                 "_back",
                 "_back",
             ],
@@ -336,18 +337,11 @@ class TestPluginInstallFlow:
 
         mock_content = b'"""Test plugin."""\n\ndef create_plugin(): pass\n'
 
-        # Mock shutil.which to return None so notify falls back to print
-        def mock_which(cmd: str) -> str | None:
-            if cmd == "notify-send":
-                return None
-            return cmd
-
         with (
             patch.object(plugin, "_fetch_repo_index", return_value=MOCK_INDEX),
             patch(
                 "menu_kit.plugins.builtin.plugins.urllib.request.urlopen"
             ) as mock_urlopen,
-            patch("shutil.which", side_effect=mock_which),
         ):
             mock_response = MagicMock()
             mock_response.read.return_value = mock_content
@@ -355,18 +349,15 @@ class TestPluginInstallFlow:
             mock_response.__exit__ = MagicMock(return_value=False)
             mock_urlopen.return_value = mock_response
 
-            # May raise MenuCancelled if we run out of selections after install
             with contextlib.suppress(MenuCancelled):
                 plugin.run(ctx)
 
-        captured = capsys.readouterr()
-        # "Installing..." notification is shown before install starts
-        assert "installing" in captured.out.lower()
-
-        # Cleanup
-        plugin_dir = get_data_dir() / "plugins" / "test-plugin"
-        if plugin_dir.exists():
-            shutil.rmtree(plugin_dir)
+        # Check result screen was shown
+        result_menus = [c for c in backend.captures if c.prompt == "Install Plugin"]
+        assert len(result_menus) == 1
+        # Should show installed message
+        messages = [i.title.lower() for i in result_menus[0].items]
+        assert any("installed" in m for m in messages)
 
 
 class TestInstalledPluginsScreen:
@@ -469,12 +460,15 @@ class TestPluginOptionsScreen:
 class TestPluginUninstallFlow:
     """Tests for uninstalling plugins."""
 
-    def test_uninstall_removes_plugin_directory(self, temp_dir: Path) -> None:
+    def test_uninstall_removes_plugin_directory(
+        self, temp_dir: Path, sandbox_environment: Path
+    ) -> None:
         """Uninstalling a plugin removes its directory."""
         plugin = PluginsPlugin()
 
-        # Create a fake installed plugin
-        plugins_dir = get_data_dir() / "plugins"
+        # Create a fake installed plugin in sandboxed data dir
+        data_dir = sandbox_environment / "data"
+        plugins_dir = data_dir / "plugins"
         plugins_dir.mkdir(parents=True, exist_ok=True)
         test_plugin_dir = plugins_dir / "uninstall-test"
         test_plugin_dir.mkdir(exist_ok=True)
@@ -493,7 +487,9 @@ class TestPluginUninstallFlow:
         assert result is True
         assert not test_plugin_dir.exists()
 
-    def test_uninstall_removes_symlinked_plugin(self, temp_dir: Path) -> None:
+    def test_uninstall_removes_symlinked_plugin(
+        self, temp_dir: Path, sandbox_environment: Path
+    ) -> None:
         """Uninstalling a symlinked plugin removes the symlink."""
         plugin = PluginsPlugin()
 
@@ -502,7 +498,8 @@ class TestPluginUninstallFlow:
         source_dir.mkdir(exist_ok=True)
         (source_dir / "__init__.py").write_text('"""Test."""\n')
 
-        plugins_dir = get_data_dir() / "plugins"
+        data_dir = sandbox_environment / "data"
+        plugins_dir = data_dir / "plugins"
         plugins_dir.mkdir(parents=True, exist_ok=True)
         symlink = plugins_dir / "symlink-test"
         symlink.symlink_to(source_dir)
@@ -527,13 +524,14 @@ class TestUninstallViaMenu:
     """Tests for uninstalling plugins through the menu interface."""
 
     def test_uninstall_removes_plugin_from_installed_list(
-        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+        self, temp_dir: Path, sandbox_environment: Path
     ) -> None:
         """After uninstalling, plugin no longer appears in installed list."""
         from menu_kit.plugins.base import PluginInfo
 
-        # Create a fake plugin that can be uninstalled
-        plugins_dir = get_data_dir() / "plugins"
+        # Create a fake plugin that can be uninstalled in sandboxed dir
+        data_dir = sandbox_environment / "data"
+        plugins_dir = data_dir / "plugins"
         plugins_dir.mkdir(parents=True, exist_ok=True)
         test_plugin_dir = plugins_dir / "test-uninstall"
         test_plugin_dir.mkdir(exist_ok=True)
@@ -556,6 +554,9 @@ class TestUninstallViaMenu:
                     return True
                 return False
 
+            def index_all(self) -> None:
+                """Mock index_all."""
+
         # Create a fake plugin object for test-uninstall
         class FakePlugin:
             @property
@@ -568,6 +569,7 @@ class TestUninstallViaMenu:
                 "plugins:installed",
                 "plugins:info:test-uninstall",
                 "plugins:opt:test-uninstall:uninstall",
+                "_done",  # Dismiss result screen
                 "_back",  # Back to installed (should not show test-uninstall)
                 "_back",  # Back to plugins menu
             ],
@@ -580,19 +582,14 @@ class TestUninstallViaMenu:
         loader.register(FakePlugin())  # type: ignore[arg-type]
         ctx._loader = loader  # type: ignore[attr-defined]
 
-        # Mock shutil.which to return None so notify falls back to print
-        def mock_which(cmd: str) -> str | None:
-            if cmd == "notify-send":
-                return None
-            return cmd
-
         plugin = PluginsPlugin()
-        with patch("shutil.which", side_effect=mock_which):
-            plugin.run(ctx)
+        plugin.run(ctx)
 
-        # Verify uninstall notification shown
-        captured = capsys.readouterr()
-        assert "uninstalled" in captured.out.lower()
+        # Verify result screen was shown
+        result_menus = [c for c in backend.captures if c.prompt == "Uninstall Plugin"]
+        assert len(result_menus) == 1
+        messages = [i.title.lower() for i in result_menus[0].items]
+        assert any("uninstalled" in m for m in messages)
 
         # Verify plugin is no longer in loader
         assert "test-uninstall" not in loader.get_all_plugins()
@@ -608,16 +605,15 @@ class TestUninstallViaMenu:
         plugin_ids = [i.id for i in last_installed.items]
         assert "plugins:info:test-uninstall" not in plugin_ids
 
-        # Cleanup
-        if test_plugin_dir.exists():
-            shutil.rmtree(test_plugin_dir)
-
-    def test_uninstall_option_shown_for_installed_plugins(self, temp_dir: Path) -> None:
+    def test_uninstall_option_shown_for_installed_plugins(
+        self, temp_dir: Path, sandbox_environment: Path
+    ) -> None:
         """Installed (non-bundled) plugins show uninstall option."""
         from menu_kit.plugins.base import PluginInfo
 
-        # Create a fake plugin
-        plugins_dir = get_data_dir() / "plugins"
+        # Create a fake plugin in sandboxed dir
+        data_dir = sandbox_environment / "data"
+        plugins_dir = data_dir / "plugins"
         plugins_dir.mkdir(parents=True, exist_ok=True)
         test_plugin_dir = plugins_dir / "my-plugin"
         test_plugin_dir.mkdir(exist_ok=True)
@@ -643,6 +639,9 @@ class TestUninstallViaMenu:
                     del self._plugins[name]
                     return True
                 return False
+
+            def index_all(self) -> None:
+                """Mock index_all."""
 
         ctx, backend = create_context(
             temp_dir,
@@ -672,9 +671,165 @@ class TestUninstallViaMenu:
         uninstall_items = [i for i in options_menu.items if ":uninstall" in i.id]
         assert len(uninstall_items) == 1
 
-        # Cleanup
-        if test_plugin_dir.exists():
-            shutil.rmtree(test_plugin_dir)
+
+class TestFullMenuFlowInstall:
+    """Integration test for installing a plugin through the full menu flow."""
+
+    def test_install_plugin_through_menu_flow(
+        self, temp_dir: Path, sandbox_environment: Path
+    ) -> None:
+        """Install a plugin by navigating through all menus."""
+        from unittest.mock import MagicMock
+
+        # Verify we're using the sandboxed data dir
+        data_dir = sandbox_environment / "data"
+        plugins_dir = data_dir / "plugins"
+
+        # Build selections for full flow:
+        # 1. Plugins main menu
+        # 2. Install New Plugins (browse)
+        # 3. Select test-plugin from list
+        # 4. Click install
+        # 5. Dismiss result screen
+        # 6. Back out
+        ctx, backend = create_context(
+            temp_dir,
+            [
+                "plugins:browse",  # Install New Plugins
+                "plugins:available:markhedleyjones/menu-kit-plugins:test-plugin",
+                "plugins:detail:test-plugin:install",
+                "_done",  # Dismiss result screen
+                "_back",  # Back to repo plugins
+                "_back",  # Back to plugins main menu (exits since single repo)
+            ],
+        )
+
+        plugin = PluginsPlugin()
+
+        mock_content = b'"""Test plugin."""\n\ndef create_plugin(): pass\n'
+
+        with (
+            patch.object(plugin, "_fetch_repo_index", return_value=MOCK_INDEX),
+            patch(
+                "menu_kit.plugins.builtin.plugins.urllib.request.urlopen"
+            ) as mock_urlopen,
+        ):
+            mock_response = MagicMock()
+            mock_response.read.return_value = mock_content
+            mock_response.__enter__ = MagicMock(return_value=mock_response)
+            mock_response.__exit__ = MagicMock(return_value=False)
+            mock_urlopen.return_value = mock_response
+
+            with contextlib.suppress(MenuCancelled):
+                plugin.run(ctx)
+
+        # Verify the plugin was installed in the sandboxed directory
+        installed_plugin_dir = plugins_dir / "test-plugin"
+        assert installed_plugin_dir.exists(), f"Plugin not found at {installed_plugin_dir}"
+        assert (installed_plugin_dir / "__init__.py").exists()
+
+        # Verify content
+        content = (installed_plugin_dir / "__init__.py").read_text()
+        assert "Test plugin" in content
+
+        # Verify result screen was shown
+        result_menus = [c for c in backend.captures if c.prompt == "Install Plugin"]
+        assert len(result_menus) == 1
+        messages = [i.title.lower() for i in result_menus[0].items]
+        assert any("installed" in m for m in messages)
+
+    def test_install_then_view_in_installed_list(
+        self, temp_dir: Path, sandbox_environment: Path
+    ) -> None:
+        """After installing a plugin, it appears in the installed list."""
+        from unittest.mock import MagicMock
+
+        from menu_kit.plugins.base import PluginInfo
+
+        data_dir = sandbox_environment / "data"
+        plugins_dir = data_dir / "plugins"
+
+        # Create a fake plugin that simulates being installed
+        class FakeInstalledPlugin:
+            @property
+            def info(self) -> PluginInfo:
+                return PluginInfo(
+                    name="test-plugin", version="1.0.0", description="Test"
+                )
+
+        # Build selections: install, then view installed
+        # With single repo, browse goes directly to repo plugins, so only one _back
+        # is needed after install to return to main menu
+        ctx, backend = create_context(
+            temp_dir,
+            [
+                "plugins:browse",  # Install New Plugins (main menu)
+                "plugins:available:markhedleyjones/menu-kit-plugins:test-plugin",  # repo
+                "plugins:detail:test-plugin:install",  # plugin details
+                "_done",  # Dismiss result screen
+                "_back",  # Exit repo list (returns to main menu with single repo)
+                "plugins:installed",  # View installed (main menu)
+                "_back",  # Exit installed list
+                "_back",  # Exit main menu
+            ],
+        )
+
+        # Register the fake plugin so it shows in installed list after install
+        class TrackingLoader:
+            def __init__(self) -> None:
+                self._plugins: dict[str, Plugin] = {}
+
+            def get_all_plugins(self) -> dict[str, Plugin]:
+                return self._plugins
+
+            def register(self, plugin: Plugin) -> None:
+                self._plugins[plugin.info.name] = plugin
+
+            def unregister_plugin(self, name: str) -> bool:
+                if name in self._plugins:
+                    del self._plugins[name]
+                    return True
+                return False
+
+            def index_all(self) -> None:
+                pass
+
+        loader = TrackingLoader()
+        loader.register(SettingsPlugin())
+        loader.register(PluginsPlugin())
+        ctx._loader = loader  # type: ignore[attr-defined]
+
+        plugin = PluginsPlugin()
+
+        mock_content = b'"""Test plugin."""\n\ndef create_plugin(): pass\n'
+
+        def simulate_install(*args, **kwargs):
+            # Simulate the plugin being installed by registering it
+            loader.register(FakeInstalledPlugin())  # type: ignore[arg-type]
+            mock_response = MagicMock()
+            mock_response.read.return_value = mock_content
+            mock_response.__enter__ = MagicMock(return_value=mock_response)
+            mock_response.__exit__ = MagicMock(return_value=False)
+            return mock_response
+
+        with (
+            patch.object(plugin, "_fetch_repo_index", return_value=MOCK_INDEX),
+            patch(
+                "menu_kit.plugins.builtin.plugins.urllib.request.urlopen",
+                side_effect=simulate_install,
+            ),
+        ):
+            with contextlib.suppress(MenuCancelled):
+                plugin.run(ctx)
+
+        # Find the installed plugins menu shown AFTER the install
+        installed_menus = [c for c in backend.captures if c.prompt == "Installed Plugins"]
+        assert len(installed_menus) >= 1
+
+        # The installed menu should show test-plugin
+        last_installed = installed_menus[-1]
+        plugin_ids = [i.id for i in last_installed.items]
+        assert "plugins:info:test-plugin" in plugin_ids
 
 
 class TestRealNetworkIntegration:
@@ -705,7 +860,7 @@ class TestRealNetworkIntegration:
             assert "download" in info
 
     @pytest.mark.network
-    def test_can_install_real_plugin(self, temp_dir: Path) -> None:
+    def test_can_install_real_plugin(self, sandbox_environment: Path) -> None:
         """Can install a real plugin from GitHub."""
         plugin = PluginsPlugin()
         index = plugin._fetch_repo_index("markhedleyjones/menu-kit-plugins")
@@ -720,16 +875,14 @@ class TestRealNetworkIntegration:
         class MockCtx:
             pass
 
-        # Remove if already exists
-        plugin_dir = get_data_dir() / "plugins" / plugin_name
-        if plugin_dir.exists():
-            shutil.rmtree(plugin_dir)
-
         result = plugin._install_plugin(
             MockCtx(), "markhedleyjones/menu-kit-plugins", plugin_name, plugin_info
         )
 
         assert result is True
+        # Use sandboxed data dir
+        data_dir = sandbox_environment / "data"
+        plugin_dir = data_dir / "plugins" / plugin_name
         assert plugin_dir.exists()
         assert (plugin_dir / "__init__.py").exists()
 
@@ -737,6 +890,3 @@ class TestRealNetworkIntegration:
         content = (plugin_dir / "__init__.py").read_text()
         assert len(content) > 0
         assert "def" in content or "class" in content
-
-        # Cleanup
-        shutil.rmtree(plugin_dir)

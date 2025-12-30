@@ -167,10 +167,16 @@ class PluginsPlugin(Plugin):
                 ctx.notify(f"Display mode changed to {new_mode.value}")
             elif selected.id.endswith(":uninstall"):
                 if self._uninstall_plugin(ctx, plugin_name):
-                    ctx.notify(f"Uninstalled {plugin_name}")
+                    ctx.show_result(
+                        f"Plugin '{plugin_name}' uninstalled",
+                        prompt="Uninstall Plugin",
+                    )
                     return  # Go back to installed list
                 else:
-                    ctx.notify(f"Failed to uninstall {plugin_name}")
+                    ctx.show_result(
+                        f"Failed to uninstall plugin '{plugin_name}'",
+                        prompt="Uninstall Plugin",
+                    )
 
     # Official repository identifier
     OFFICIAL_REPO = "markhedleyjones/menu-kit-plugins"
@@ -305,13 +311,17 @@ class PluginsPlugin(Plugin):
                 return
 
             if selected.id.endswith(":install"):
-                # Show immediate feedback that install is starting
-                ctx.notify(f"Installing {plugin_name}...")
                 if self._install_plugin(ctx, repo, plugin_name, plugin_info):
-                    ctx.notify(f"Installed {plugin_name}")
+                    ctx.show_result(
+                        f"Plugin '{plugin_name}' installed successfully",
+                        prompt="Install Plugin",
+                    )
                     return
                 else:
-                    ctx.notify(f"Failed to install {plugin_name}")
+                    ctx.show_result(
+                        f"Failed to install plugin '{plugin_name}'",
+                        prompt="Install Plugin",
+                    )
 
     def _install_plugin(
         self,

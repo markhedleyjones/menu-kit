@@ -91,8 +91,15 @@ class SettingsPlugin(Plugin):
 
     def _rebuild_cache(self, ctx: PluginContext) -> None:
         """Trigger a cache rebuild."""
-        ctx.database.clear_items()
-        ctx.notify("Cache cleared. Restart menu-kit to rebuild.")
+        # Get the loader to trigger a full reindex
+        loader = getattr(ctx, "_loader", None)
+        if loader is not None:
+            loader.index_all()
+            item_count = len(ctx.database.get_items())
+            ctx.show_result(f"Cache rebuilt ({item_count} items)", prompt="Rebuild Cache")
+        else:
+            ctx.database.clear_items()
+            ctx.show_result("Cache cleared", prompt="Rebuild Cache")
 
     def index(self, ctx: PluginContext) -> list[MenuItem]:
         """Register settings in main menu."""

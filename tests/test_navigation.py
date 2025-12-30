@@ -84,6 +84,9 @@ class MockLoader:
     def register(self, plugin: Plugin) -> None:
         self._plugins[plugin.info.name] = plugin
 
+    def index_all(self) -> None:
+        """Mock index_all - does nothing in tests."""
+
 
 def create_context(
     temp_dir: Path, selections: list[str | None]
@@ -332,15 +335,15 @@ class TestNavigationPaths:
                 ["settings:backend", "settings:backend:rofi", "_back"],
                 ["Settings", "Select Backend", "Settings"],
             ),
-            # Rebuild cache (action)
+            # Rebuild cache (action) - shows result menu
             (
-                ["settings:rebuild", "_back"],
-                ["Settings", "Settings"],
+                ["settings:rebuild", "_done", "_back"],
+                ["Settings", "Rebuild Cache", "Settings"],
             ),
             # Multiple actions before exit
             (
-                ["settings:frequency", "settings:rebuild", "_back"],
-                ["Settings", "Settings", "Settings"],
+                ["settings:frequency", "settings:rebuild", "_done", "_back"],
+                ["Settings", "Settings", "Rebuild Cache", "Settings"],
             ),
         ],
     )
@@ -517,20 +520,23 @@ class TestMenuItemBehavior:
         captured = capsys.readouterr()
         assert "backend" in captured.out.lower() or "fzf" in captured.out.lower()
 
-    def test_settings_rebuild_shows_notification(
-        self,
-        temp_dir: Path,
-        capsys: pytest.CaptureFixture[str],
-        disable_notify_send: None,
-    ) -> None:
-        """Selecting Rebuild Cache shows appropriate notification."""
-        ctx, _ = create_context(temp_dir, ["settings:rebuild", "_back"])
+    def test_settings_rebuild_shows_result(self, temp_dir: Path) -> None:
+        """Selecting Rebuild Cache shows result screen."""
+        # Need extra selection to dismiss the result menu
+        ctx, backend = create_context(
+            temp_dir, ["settings:rebuild", "_done", "_back"]
+        )
         plugin = SettingsPlugin()
 
         plugin.run(ctx)
 
-        captured = capsys.readouterr()
-        assert "rebuild" in captured.out.lower() or "cache" in captured.out.lower()
+        # Check that the result menu was shown
+        result_menus = [c for c in backend.captures if c.prompt == "Rebuild Cache"]
+        assert len(result_menus) == 1
+        # Should show cache rebuilt message
+        result_menu = result_menus[0]
+        messages = [i.title.lower() for i in result_menu.items]
+        assert any("cache" in m or "rebuilt" in m for m in messages)
 
     def test_plugins_updates_shows_notification(
         self,

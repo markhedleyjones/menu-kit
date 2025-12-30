@@ -13,6 +13,36 @@ from menu_kit.core.config import Config
 from menu_kit.core.database import Database
 
 
+@pytest.fixture(autouse=True)
+def sandbox_environment() -> Generator[Path, None, None]:
+    """Sandbox all tests to use a temporary directory for data/config/cache.
+
+    This prevents tests from affecting the real user directories and ensures
+    tests are isolated from each other.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        sandbox = Path(tmpdir)
+        data_dir = sandbox / "data"
+        config_dir = sandbox / "config"
+        cache_dir = sandbox / "cache"
+
+        # Create the directories
+        data_dir.mkdir()
+        config_dir.mkdir()
+        cache_dir.mkdir()
+
+        with (
+            patch("menu_kit.core.config.get_data_dir", return_value=data_dir),
+            patch("menu_kit.core.config.get_config_dir", return_value=config_dir),
+            patch("menu_kit.core.config.get_cache_dir", return_value=cache_dir),
+            # Also patch direct imports in other modules
+            patch("menu_kit.plugins.loader.get_data_dir", return_value=data_dir),
+            patch("menu_kit.plugins.loader.get_config_dir", return_value=config_dir),
+            patch("menu_kit.plugins.builtin.plugins.get_data_dir", return_value=data_dir),
+        ):
+            yield sandbox
+
+
 @pytest.fixture
 def temp_dir() -> Generator[Path, None, None]:
     """Create a temporary directory for tests."""

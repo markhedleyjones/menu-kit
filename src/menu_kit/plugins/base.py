@@ -97,6 +97,31 @@ class PluginContext:
         # Fallback to console
         print(f"[{title}] {message}")
 
+    def show_result(self, message: str, prompt: str = "Result") -> None:
+        """Show an action result in a menu.
+
+        Displays a message with a Done button. Use this for feedback
+        after completing an action, keeping the user in the menu flow.
+
+        Args:
+            message: The result message to display
+            prompt: The menu prompt/title
+        """
+        items = [
+            MenuItem(
+                id="_result_message",
+                title=message,
+                item_type=ItemType.INFO,
+            ),
+            MenuItem(
+                id="_done",
+                title="Done",
+                item_type=ItemType.ACTION,
+            ),
+        ]
+        # Show without back button since Done serves that purpose
+        self.menu_backend.show(items, prompt)
+
     def get_data(self, key: str) -> Any:
         """Get plugin-specific data from storage."""
         # Plugin name will be set by the loader
