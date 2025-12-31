@@ -12,9 +12,7 @@ from menu_kit.menu.base import MenuResult
 from menu_kit.plugins.base import MenuCancelled, PluginContext
 
 
-def test_plugin_context_menu_with_back_button(
-    config: Config, database: Database
-) -> None:
+def test_plugin_context_menu_with_back_button(config: Config, database: Database) -> None:
     """Test that back button is added when show_back=True."""
     mock_backend = MagicMock()
     mock_backend.show.return_value = MenuResult(cancelled=True, selected=None)
@@ -40,9 +38,7 @@ def test_plugin_context_menu_with_back_button(
     assert display_items[2].title == "Back"
 
 
-def test_plugin_context_menu_without_back_button(
-    config: Config, database: Database
-) -> None:
+def test_plugin_context_menu_without_back_button(config: Config, database: Database) -> None:
     """Test that back button is not added when show_back=False."""
     mock_backend = MagicMock()
     mock_backend.show.return_value = MenuResult(cancelled=True, selected=None)
@@ -65,9 +61,7 @@ def test_plugin_context_menu_without_back_button(
     assert display_items[1].id == "item2"
 
 
-def test_plugin_context_menu_back_returns_none(
-    config: Config, database: Database
-) -> None:
+def test_plugin_context_menu_back_returns_none(config: Config, database: Database) -> None:
     """Test that selecting back button returns None."""
     mock_backend = MagicMock()
     back_item = MenuItem(id="_back", title="Back", item_type=ItemType.ACTION)
@@ -98,9 +92,7 @@ def test_plugin_context_menu_selection(config: Config, database: Database) -> No
     assert result.id == "item1"
 
 
-def test_plugin_context_menu_cancelled_raises_exception(
-    config: Config, database: Database
-) -> None:
+def test_plugin_context_menu_cancelled_raises_exception(config: Config, database: Database) -> None:
     """Test that cancelling (ESC) raises MenuCancelled exception."""
     mock_backend = MagicMock()
     mock_backend.show.return_value = MenuResult(cancelled=True, selected=None)

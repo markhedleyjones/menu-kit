@@ -105,9 +105,7 @@ def test_config_save_roundtrip(temp_dir: Path) -> None:
         {
             "menu": {"backend": "fuzzel"},
             "frequency_tracking": False,
-            "plugins": {
-                "repositories": ["markhedleyjones/menu-kit-plugins", "custom/repo"]
-            },
+            "plugins": {"repositories": ["markhedleyjones/menu-kit-plugins", "custom/repo"]},
         }
     )
 

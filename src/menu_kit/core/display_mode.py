@@ -52,9 +52,7 @@ class DisplayModeManager:
 
     def _load_cache(self) -> None:
         """Load display modes from database."""
-        stored = (
-            self.database.get_plugin_data(CORE_PLUGIN_NAME, DISPLAY_MODES_KEY) or {}
-        )
+        stored = self.database.get_plugin_data(CORE_PLUGIN_NAME, DISPLAY_MODES_KEY) or {}
         self._cache = {name: DisplayMode(value) for name, value in stored.items()}
 
     def _get_default_mode(self, plugin_name: str) -> DisplayMode:

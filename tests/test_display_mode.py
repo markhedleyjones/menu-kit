@@ -35,10 +35,7 @@ class TestDisplayModeManager:
         manager = DisplayModeManager(config, database)
 
         # Add 5 items (below default threshold of 20)
-        items = [
-            MenuItem(id=f"test:{i}", title=f"Item {i}", plugin="testplugin")
-            for i in range(5)
-        ]
+        items = [MenuItem(id=f"test:{i}", title=f"Item {i}", plugin="testplugin") for i in range(5)]
         database.add_items(items)
 
         mode = manager.get_mode("testplugin")
@@ -52,8 +49,7 @@ class TestDisplayModeManager:
 
         # Add 25 items (above default threshold of 20)
         items = [
-            MenuItem(id=f"test:{i}", title=f"Item {i}", plugin="testplugin")
-            for i in range(25)
+            MenuItem(id=f"test:{i}", title=f"Item {i}", plugin="testplugin") for i in range(25)
         ]
         database.add_items(items)
 
@@ -68,8 +64,7 @@ class TestDisplayModeManager:
 
         # Add 25 items (would default to submenu)
         items = [
-            MenuItem(id=f"test:{i}", title=f"Item {i}", plugin="testplugin")
-            for i in range(25)
+            MenuItem(id=f"test:{i}", title=f"Item {i}", plugin="testplugin") for i in range(25)
         ]
         database.add_items(items)
 
@@ -131,10 +126,7 @@ class TestDisplayModeManager:
         manager = DisplayModeManager(config, database)
 
         # Add items to trigger auto mode
-        items = [
-            MenuItem(id=f"test:{i}", title=f"Item {i}", plugin="testplugin")
-            for i in range(5)
-        ]
+        items = [MenuItem(id=f"test:{i}", title=f"Item {i}", plugin="testplugin") for i in range(5)]
         database.add_items(items)
 
         # Get mode to populate cache
@@ -162,8 +154,7 @@ class TestDisplayModeConfig:
 
         # Add many items (would be submenu in auto mode)
         items = [
-            MenuItem(id=f"test:{i}", title=f"Item {i}", plugin="testplugin")
-            for i in range(50)
+            MenuItem(id=f"test:{i}", title=f"Item {i}", plugin="testplugin") for i in range(50)
         ]
         database.add_items(items)
 
@@ -179,10 +170,7 @@ class TestDisplayModeConfig:
         manager = DisplayModeManager(config, database)
 
         # Add few items (would be inline in auto mode)
-        items = [
-            MenuItem(id=f"test:{i}", title=f"Item {i}", plugin="testplugin")
-            for i in range(3)
-        ]
+        items = [MenuItem(id=f"test:{i}", title=f"Item {i}", plugin="testplugin") for i in range(3)]
         database.add_items(items)
 
         mode = manager.get_mode("testplugin")
@@ -198,8 +186,7 @@ class TestDisplayModeConfig:
 
         # Add 15 items (above custom threshold of 10)
         items = [
-            MenuItem(id=f"test:{i}", title=f"Item {i}", plugin="testplugin")
-            for i in range(15)
+            MenuItem(id=f"test:{i}", title=f"Item {i}", plugin="testplugin") for i in range(15)
         ]
         database.add_items(items)
 
@@ -239,8 +226,7 @@ class TestDisplayModeEdgeCases:
 
         # Add exactly 20 items (at default threshold)
         items = [
-            MenuItem(id=f"test:{i}", title=f"Item {i}", plugin="testplugin")
-            for i in range(20)
+            MenuItem(id=f"test:{i}", title=f"Item {i}", plugin="testplugin") for i in range(20)
         ]
         database.add_items(items)
 
@@ -255,8 +241,7 @@ class TestDisplayModeEdgeCases:
 
         # Add exactly 21 items (one over default threshold)
         items = [
-            MenuItem(id=f"test:{i}", title=f"Item {i}", plugin="testplugin")
-            for i in range(21)
+            MenuItem(id=f"test:{i}", title=f"Item {i}", plugin="testplugin") for i in range(21)
         ]
         database.add_items(items)
 

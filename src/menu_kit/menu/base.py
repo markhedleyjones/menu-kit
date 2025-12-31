@@ -122,7 +122,5 @@ def check_gui_backend_available() -> bool:
     from menu_kit.menu.fuzzel import FuzzelBackend
     from menu_kit.menu.rofi import RofiBackend
 
-    for backend_class in [RofiBackend, DmenuBackend, FuzzelBackend]:
-        if backend_class().is_available():
-            return True
-    return False
+    backends: list[type[MenuBackend]] = [RofiBackend, DmenuBackend, FuzzelBackend]
+    return any(backend_class().is_available() for backend_class in backends)

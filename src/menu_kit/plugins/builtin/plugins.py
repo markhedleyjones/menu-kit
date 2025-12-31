@@ -216,7 +216,8 @@ class PluginsPlugin(Plugin):
         url = f"https://raw.githubusercontent.com/{repo}/main/index.json"
         try:
             with urllib.request.urlopen(url, timeout=10) as response:
-                return json.loads(response.read().decode("utf-8"))
+                result: dict[str, Any] = json.loads(response.read().decode("utf-8"))
+                return result
         except Exception:
             return None
 

@@ -63,9 +63,7 @@ class DisplayConfig:
 class PluginsConfig:
     """Configuration for the plugin system."""
 
-    repositories: list[str] = field(
-        default_factory=lambda: ["markhedleyjones/menu-kit-plugins"]
-    )
+    repositories: list[str] = field(default_factory=lambda: ["markhedleyjones/menu-kit-plugins"])
     allow_unverified: bool = False
     default_display_mode: str = "auto"  # "inline", "submenu", "auto"
     item_threshold: int = 20  # For auto mode: >threshold items → submenu
@@ -126,9 +124,7 @@ class Config:
 
         plugins_data = data.get("plugins", {})
         plugins = PluginsConfig(
-            repositories=plugins_data.get(
-                "repositories", ["markhedleyjones/menu-kit-plugins"]
-            ),
+            repositories=plugins_data.get("repositories", ["markhedleyjones/menu-kit-plugins"]),
             allow_unverified=plugins_data.get("allow_unverified", False),
             default_display_mode=plugins_data.get("default_display_mode", "auto"),
             item_threshold=plugins_data.get("item_threshold", 20),
@@ -146,7 +142,9 @@ class Config:
         backend_config = getattr(self.menu, backend, None)
         if backend_config is None:
             return []
-        return backend_config.args
+        if isinstance(backend_config, MenuBackendConfig):
+            return backend_config.args
+        return []
 
     def save(self, path: Path | None = None) -> None:
         """Save configuration to file."""
@@ -204,9 +202,7 @@ class Config:
         if self.plugins.allow_unverified:
             lines.append("allow_unverified = true")
         if self.plugins.default_display_mode != "auto":
-            lines.append(
-                f'default_display_mode = "{self.plugins.default_display_mode}"'
-            )
+            lines.append(f'default_display_mode = "{self.plugins.default_display_mode}"')
         if self.plugins.item_threshold != 20:
             lines.append(f"item_threshold = {self.plugins.item_threshold}")
 

@@ -65,11 +65,7 @@ class PluginLoader:
             if item.is_dir() and (item / "__init__.py").exists():
                 # Package plugin
                 self._load_plugin_package(item)
-            elif (
-                item.is_file()
-                and item.suffix == ".py"
-                and not item.name.startswith("_")
-            ):
+            elif item.is_file() and item.suffix == ".py" and not item.name.startswith("_"):
                 # Single-file plugin
                 self._load_plugin_file(item)
 

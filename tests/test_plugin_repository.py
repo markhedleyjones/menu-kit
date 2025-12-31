@@ -182,9 +182,7 @@ class TestRepositoryPluginsList:
         assert len(repo_menus) == 1
 
         repo_menu = repo_menus[0]
-        plugin_items = [
-            i for i in repo_menu.items if i.id.startswith("plugins:available:")
-        ]
+        plugin_items = [i for i in repo_menu.items if i.id.startswith("plugins:available:")]
 
         # Should show both test plugins
         assert len(plugin_items) == 2
@@ -208,9 +206,7 @@ class TestRepositoryPluginsList:
             plugin.run(ctx)
 
         repo_menu = next(c for c in backend.captures if c.prompt == "Official")
-        plugin_items = [
-            i for i in repo_menu.items if i.id.startswith("plugins:available:")
-        ]
+        plugin_items = [i for i in repo_menu.items if i.id.startswith("plugins:available:")]
 
         for item in plugin_items:
             assert item.badge is not None
@@ -293,9 +289,7 @@ class TestPluginInstallFlow:
         # Mock the download to avoid network
         mock_content = b'"""Test plugin."""\n\ndef create_plugin(): pass\n'
 
-        with patch(
-            "menu_kit.plugins.builtin.plugins.urllib.request.urlopen"
-        ) as mock_urlopen:
+        with patch("menu_kit.plugins.builtin.plugins.urllib.request.urlopen") as mock_urlopen:
             mock_response = MagicMock()
             mock_response.read.return_value = mock_content
             mock_response.__enter__ = MagicMock(return_value=mock_response)
@@ -316,9 +310,7 @@ class TestPluginInstallFlow:
         assert plugin_dir.exists()
         assert (plugin_dir / "__init__.py").exists()
 
-    def test_install_shows_result_screen(
-        self, temp_dir: Path, sandbox_environment: Path
-    ) -> None:
+    def test_install_shows_result_screen(self, temp_dir: Path, sandbox_environment: Path) -> None:
         """Installing a plugin shows result screen."""
         from unittest.mock import MagicMock
 
@@ -339,9 +331,7 @@ class TestPluginInstallFlow:
 
         with (
             patch.object(plugin, "_fetch_repo_index", return_value=MOCK_INDEX),
-            patch(
-                "menu_kit.plugins.builtin.plugins.urllib.request.urlopen"
-            ) as mock_urlopen,
+            patch("menu_kit.plugins.builtin.plugins.urllib.request.urlopen") as mock_urlopen,
         ):
             mock_response = MagicMock()
             mock_response.read.return_value = mock_content
@@ -373,9 +363,7 @@ class TestInstalledPluginsScreen:
         installed_menu = backend.captures[1]
         assert installed_menu.prompt == "Installed Plugins"
 
-        plugin_items = [
-            i for i in installed_menu.items if i.id.startswith("plugins:info:")
-        ]
+        plugin_items = [i for i in installed_menu.items if i.id.startswith("plugins:info:")]
 
         # Should show settings and plugins (bundled)
         plugin_ids = [i.id for i in plugin_items]
@@ -390,9 +378,7 @@ class TestInstalledPluginsScreen:
         plugin.run(ctx)
 
         installed_menu = backend.captures[1]
-        plugin_items = [
-            i for i in installed_menu.items if i.id.startswith("plugins:info:")
-        ]
+        plugin_items = [i for i in installed_menu.items if i.id.startswith("plugins:info:")]
 
         for item in plugin_items:
             assert item.badge is not None
@@ -595,9 +581,7 @@ class TestUninstallViaMenu:
         assert "test-uninstall" not in loader.get_all_plugins()
 
         # Verify the installed list was shown again and doesn't contain test-uninstall
-        installed_menus = [
-            c for c in backend.captures if c.prompt == "Installed Plugins"
-        ]
+        installed_menus = [c for c in backend.captures if c.prompt == "Installed Plugins"]
         assert len(installed_menus) >= 2  # Before and after uninstall
 
         # The last installed menu should not have test-uninstall
@@ -710,9 +694,7 @@ class TestFullMenuFlowInstall:
 
         with (
             patch.object(plugin, "_fetch_repo_index", return_value=MOCK_INDEX),
-            patch(
-                "menu_kit.plugins.builtin.plugins.urllib.request.urlopen"
-            ) as mock_urlopen,
+            patch("menu_kit.plugins.builtin.plugins.urllib.request.urlopen") as mock_urlopen,
         ):
             mock_response = MagicMock()
             mock_response.read.return_value = mock_content
@@ -746,16 +728,11 @@ class TestFullMenuFlowInstall:
 
         from menu_kit.plugins.base import PluginInfo
 
-        data_dir = sandbox_environment / "data"
-        plugins_dir = data_dir / "plugins"
-
         # Create a fake plugin that simulates being installed
         class FakeInstalledPlugin:
             @property
             def info(self) -> PluginInfo:
-                return PluginInfo(
-                    name="test-plugin", version="1.0.0", description="Test"
-                )
+                return PluginInfo(name="test-plugin", version="1.0.0", description="Test")
 
         # Build selections: install, then view installed
         # With single repo, browse goes directly to repo plugins, so only one _back
@@ -818,9 +795,9 @@ class TestFullMenuFlowInstall:
                 "menu_kit.plugins.builtin.plugins.urllib.request.urlopen",
                 side_effect=simulate_install,
             ),
+            contextlib.suppress(MenuCancelled),
         ):
-            with contextlib.suppress(MenuCancelled):
-                plugin.run(ctx)
+            plugin.run(ctx)
 
         # Find the installed plugins menu shown AFTER the install
         installed_menus = [c for c in backend.captures if c.prompt == "Installed Plugins"]

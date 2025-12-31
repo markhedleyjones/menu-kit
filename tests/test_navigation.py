@@ -510,9 +510,7 @@ class TestMenuItemBehavior:
         disable_notify_send: None,
     ) -> None:
         """Selecting a backend option shows confirmation notification."""
-        ctx, _ = create_context(
-            temp_dir, ["settings:backend", "settings:backend:fzf", "_back"]
-        )
+        ctx, _ = create_context(temp_dir, ["settings:backend", "settings:backend:fzf", "_back"])
         plugin = SettingsPlugin()
 
         plugin.run(ctx)
@@ -523,9 +521,7 @@ class TestMenuItemBehavior:
     def test_settings_rebuild_shows_result(self, temp_dir: Path) -> None:
         """Selecting Rebuild Cache shows result screen."""
         # Need extra selection to dismiss the result menu
-        ctx, backend = create_context(
-            temp_dir, ["settings:rebuild", "_done", "_back"]
-        )
+        ctx, backend = create_context(temp_dir, ["settings:rebuild", "_done", "_back"])
         plugin = SettingsPlugin()
 
         plugin.run(ctx)
@@ -733,11 +729,7 @@ class TestMenuItemConsistency:
         plugin.run(ctx)
 
         for capture in backend.captures:
-            back_items = [
-                i for i, item in enumerate(capture.items) if item.id == "_back"
-            ]
+            back_items = [i for i, item in enumerate(capture.items) if item.id == "_back"]
             if back_items:
                 expected_pos = len(capture.items) - 1
-                assert back_items[0] == expected_pos, (
-                    f"Back button not last in '{capture.prompt}'"
-                )
+                assert back_items[0] == expected_pos, f"Back button not last in '{capture.prompt}'"

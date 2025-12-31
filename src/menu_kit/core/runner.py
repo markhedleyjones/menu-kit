@@ -271,9 +271,7 @@ class Runner:
                 result.append(
                     MenuItem(
                         id=item.id,
-                        title=display_manager.format_inline_title(
-                            item.plugin, item.title
-                        ),
+                        title=display_manager.format_inline_title(item.plugin, item.title),
                         item_type=item.item_type,
                         path=item.path,
                         plugin=item.plugin,
@@ -327,9 +325,7 @@ class Runner:
         else:
             return items
 
-    def _show_plugin_submenu(
-        self, plugin_name: str, display_manager: DisplayModeManager
-    ) -> bool:
+    def _show_plugin_submenu(self, plugin_name: str, display_manager: DisplayModeManager) -> bool:
         """Show items for a plugin in submenu mode.
 
         Returns:
