@@ -229,9 +229,14 @@ class Runner:
 
             # Handle submenu entry selection
             if item.id.startswith("_submenu:"):
+                from menu_kit.plugins.base import MenuCancelled
+
                 plugin_name = item.id[9:]  # Remove "_submenu:" prefix
-                if self._show_plugin_submenu(plugin_name, display_manager):
-                    return EXIT_SUCCESS  # Plugin was executed, exit
+                try:
+                    if self._show_plugin_submenu(plugin_name, display_manager):
+                        return EXIT_SUCCESS  # Plugin was executed, exit
+                except MenuCancelled:
+                    return EXIT_CANCELLED  # ESC pressed, exit
                 continue
 
             # Record usage
@@ -341,8 +346,13 @@ class Runner:
 
         Returns:
             True if a plugin was executed (caller should exit),
-            False if cancelled/back (caller should continue).
+            False if back button selected (caller should continue).
+
+        Raises:
+            MenuCancelled: If user presses ESC (should exit entire menu).
         """
+        from menu_kit.plugins.base import MenuCancelled
+
         assert self.database is not None
         assert self.backend is not None
         assert self.config is not None
@@ -362,10 +372,11 @@ class Runner:
 
             result = self.backend.show(items, prompt=prompt)
 
-            if result.cancelled or result.selected is None:
-                return False
+            # ESC pressed - propagate up to exit entire menu
+            if result.cancelled:
+                raise MenuCancelled()
 
-            if result.selected.id == "_back":
+            if result.selected is None or result.selected.id == "_back":
                 return False
 
             item = result.selected
