@@ -70,6 +70,11 @@ CREATE TABLE IF NOT EXISTS plugin_data (
 
 CREATE INDEX IF NOT EXISTS idx_items_plugin ON items(plugin);
 CREATE INDEX IF NOT EXISTS idx_items_type ON items(item_type);
+
+CREATE TABLE IF NOT EXISTS cache_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);
 """
 
 
@@ -321,3 +326,39 @@ class Database:
             use_count=row["count"],
             last_used=last_used,
         )
+
+    # Cache metadata methods
+
+    def get_cache_meta(self, key: str) -> str | None:
+        """Get cache metadata value."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT value FROM cache_meta WHERE key = ?", (key,)
+            ).fetchone()
+            return row["value"] if row else None
+
+    def set_cache_meta(self, key: str, value: str) -> None:
+        """Set cache metadata value."""
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO cache_meta (key, value) VALUES (?, ?)",
+                (key, value),
+            )
+
+    def get_last_rebuilt(self) -> datetime | None:
+        """Get timestamp of last cache rebuild."""
+        value = self.get_cache_meta("last_rebuilt")
+        if value:
+            return datetime.fromisoformat(value)
+        return None
+
+    def set_last_rebuilt(self) -> None:
+        """Set last rebuild timestamp to now."""
+        self.set_cache_meta("last_rebuilt", datetime.now().isoformat())
+
+    def is_empty(self) -> bool:
+        """Check if the items table is empty."""
+        with self._connect() as conn:
+            row = conn.execute("SELECT COUNT(*) as count FROM items").fetchone()
+            count: int = row["count"] if row else 0
+            return count == 0

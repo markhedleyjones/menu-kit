@@ -17,6 +17,11 @@ class PluginsPlugin(Plugin):
     """Plugin for browsing, installing, and managing plugins."""
 
     @property
+    def cacheable(self) -> bool:
+        """Plugins menu is always computed fresh - cheap and ensures availability."""
+        return False
+
+    @property
     def info(self) -> PluginInfo:
         return PluginInfo(
             name="plugins",

@@ -13,6 +13,11 @@ class SettingsPlugin(Plugin):
     """Plugin for configuring menu-kit options."""
 
     @property
+    def cacheable(self) -> bool:
+        """Settings is always computed fresh - cheap and ensures availability."""
+        return False
+
+    @property
     def info(self) -> PluginInfo:
         return PluginInfo(
             name="settings",

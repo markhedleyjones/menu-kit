@@ -175,6 +175,20 @@ class Plugin(ABC):
     """Base plugin interface."""
 
     @property
+    def cacheable(self) -> bool:
+        """Whether plugin items can be cached.
+
+        Cacheable plugins have their index() called during --rebuild and
+        results stored in the database/display cache.
+
+        Non-cacheable plugins have index() called at runtime for fresh data.
+        Use cacheable=False for plugins with dynamic content (settings, plugin manager).
+
+        Default: True
+        """
+        return True
+
+    @property
     @abstractmethod
     def info(self) -> PluginInfo:
         """Return plugin metadata."""

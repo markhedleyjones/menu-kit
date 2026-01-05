@@ -93,8 +93,13 @@ class Runner:
         self.loader = PluginLoader(self.config, self.database, self.backend)
         self.loader.load_all()
 
-        # Rebuild index
-        self.loader.index_all()
+        # Only rebuild if explicitly requested or cache is empty
+        # Fast path: use cached items, only compute dynamic plugins at runtime
+        if self.options.rebuild:
+            self.loader.index_all(cacheable_only=True)
+        elif self.database.is_empty():
+            # First run or cache cleared - rebuild cacheable plugins
+            self.loader.index_all(cacheable_only=True)
 
         return EXIT_SUCCESS
 
@@ -249,7 +254,13 @@ class Runner:
 
         sort = self.config.display.sort
         order_by_freq = sort == "frequency"
+
+        # Get cached items from database
         all_items = self.database.get_items(order_by_frequency=order_by_freq)
+
+        # Add dynamic items from non-cacheable plugins (computed fresh each time)
+        dynamic_items = self.loader.index_dynamic()
+        all_items.extend(dynamic_items)
 
         result: list[MenuItem] = []
         submenu_plugins: dict[str, int] = {}  # plugin_name -> item_count

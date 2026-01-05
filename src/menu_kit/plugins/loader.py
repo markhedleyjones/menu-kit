@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from menu_kit.core.config import get_config_dir, get_data_dir
+from menu_kit.core.database import MenuItem
 from menu_kit.plugins.base import Plugin, PluginContext
 
 if TYPE_CHECKING:
@@ -197,28 +198,68 @@ class PluginLoader:
             print(f"Error running plugin {name}: {e}")
             return False
 
-    def index_all(self) -> None:
-        """Rebuild the index from all plugins."""
-        # Clear all items first (removes stale items from uninstalled plugins)
+    def index_all(self, cacheable_only: bool = True) -> None:
+        """Rebuild the index from all plugins.
+
+        Args:
+            cacheable_only: If True, only index cacheable plugins (for --rebuild).
+                           If False, index all plugins (legacy behavior).
+        """
+        # Clear cached items first (removes stale items from uninstalled plugins)
         self.database.clear_items()
 
         for name, plugin in self._plugins.items():
+            # Skip non-cacheable plugins during rebuild (they're indexed at runtime)
+            # Use getattr for backwards compatibility with older plugins
+            is_cacheable = getattr(plugin, "cacheable", True)
+            if cacheable_only and not is_cacheable:
+                continue
+
             ctx = self._contexts.get(name)
             if ctx is None:
                 continue
 
             try:
-                # Get new items
                 items = plugin.index(ctx)
-
-                # Tag items with plugin name
                 for item in items:
                     item.plugin = name
-
-                # Store items
                 self.database.add_items(items)
             except Exception as e:
                 print(f"Error indexing plugin {name}: {e}")
+
+        # Update rebuild timestamp
+        self.database.set_last_rebuilt()
+
+    def index_dynamic(self) -> list[MenuItem]:
+        """Index non-cacheable plugins and return their items.
+
+        Called at runtime to get fresh items from dynamic plugins.
+        These items are NOT stored in the database.
+
+        Returns:
+            List of MenuItems from non-cacheable plugins.
+        """
+        items: list[MenuItem] = []
+
+        for name, plugin in self._plugins.items():
+            # Use getattr for backwards compatibility with older plugins
+            is_cacheable = getattr(plugin, "cacheable", True)
+            if is_cacheable:
+                continue
+
+            ctx = self._contexts.get(name)
+            if ctx is None:
+                continue
+
+            try:
+                plugin_items = plugin.index(ctx)
+                for item in plugin_items:
+                    item.plugin = name
+                items.extend(plugin_items)
+            except Exception as e:
+                print(f"Error indexing dynamic plugin {name}: {e}")
+
+        return items
 
     def teardown_all(self) -> None:
         """Teardown all plugins."""
