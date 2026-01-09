@@ -867,3 +867,354 @@ class TestRealNetworkIntegration:
         content = (plugin_dir / "__init__.py").read_text()
         assert len(content) > 0
         assert "def" in content or "class" in content
+
+
+class TestVersionComparison:
+    """Tests for version comparison logic."""
+
+    def test_newer_major_version(self) -> None:
+        """Major version bump is detected as newer."""
+        plugin = PluginsPlugin()
+        assert plugin._version_is_newer("2.0.0", "1.0.0") is True
+
+    def test_newer_minor_version(self) -> None:
+        """Minor version bump is detected as newer."""
+        plugin = PluginsPlugin()
+        assert plugin._version_is_newer("1.1.0", "1.0.0") is True
+
+    def test_newer_patch_version(self) -> None:
+        """Patch version bump is detected as newer."""
+        plugin = PluginsPlugin()
+        assert plugin._version_is_newer("1.0.1", "1.0.0") is True
+
+    def test_same_version_not_newer(self) -> None:
+        """Same version is not newer."""
+        plugin = PluginsPlugin()
+        assert plugin._version_is_newer("1.0.0", "1.0.0") is False
+
+    def test_older_version_not_newer(self) -> None:
+        """Older version is not newer."""
+        plugin = PluginsPlugin()
+        assert plugin._version_is_newer("1.0.0", "2.0.0") is False
+
+    def test_different_length_versions(self) -> None:
+        """Handles versions with different numbers of parts."""
+        plugin = PluginsPlugin()
+        assert plugin._version_is_newer("1.0.0.1", "1.0.0") is True
+        assert plugin._version_is_newer("1.0", "1.0.0") is False
+
+
+class TestUpdateCheckNoPlugins:
+    """Tests for update check when no plugins are installed."""
+
+    def test_no_plugins_shows_message(self, temp_dir: Path) -> None:
+        """When no non-bundled plugins installed, shows appropriate message."""
+        ctx, backend = create_context(
+            temp_dir,
+            [
+                "plugins:updates",
+                "_done",  # Dismiss result screen
+                "_back",
+            ],
+        )
+        plugin = PluginsPlugin()
+
+        plugin.run(ctx)
+
+        # Should show result screen with "no installed plugins" message
+        result_menus = [c for c in backend.captures if c.prompt == "Update Plugins"]
+        assert len(result_menus) == 1
+        messages = [i.title.lower() for i in result_menus[0].items]
+        assert any("no installed" in m for m in messages)
+
+
+class TestUpdateCheckAllUpToDate:
+    """Tests for update check when all plugins are up to date."""
+
+    def test_all_up_to_date_shows_message(
+        self, temp_dir: Path, sandbox_environment: Path
+    ) -> None:
+        """When all plugins are current, shows 'all up to date' message."""
+        from menu_kit.plugins.base import PluginInfo
+
+        # Create a fake installed plugin with same version as in repo
+        class FakePlugin:
+            @property
+            def info(self) -> PluginInfo:
+                return PluginInfo(name="test-plugin", version="1.0.0")
+
+        # Mock index returns same version as installed
+        mock_index = {
+            "version": 1,
+            "plugins": {
+                "test-plugin": {
+                    "version": "1.0.0",
+                    "description": "Test plugin",
+                    "download": "plugins/test-plugin",
+                },
+            },
+        }
+
+        ctx, backend = create_context(
+            temp_dir,
+            [
+                "plugins:updates",
+                "_done",  # Dismiss result screen
+                "_back",
+            ],
+        )
+
+        # Set up loader with fake plugin
+        class TrackingLoader:
+            def __init__(self) -> None:
+                self._plugins: dict[str, Plugin] = {}
+
+            def get_all_plugins(self) -> dict[str, Plugin]:
+                return self._plugins
+
+            def register(self, plugin: Plugin) -> None:
+                self._plugins[plugin.info.name] = plugin
+
+        loader = TrackingLoader()
+        loader.register(SettingsPlugin())
+        loader.register(PluginsPlugin())
+        loader.register(FakePlugin())  # type: ignore[arg-type]
+        ctx._loader = loader  # type: ignore[attr-defined]
+
+        plugin = PluginsPlugin()
+
+        with patch.object(plugin, "_fetch_repo_index", return_value=mock_index):
+            plugin.run(ctx)
+
+        # Should show "all up to date" message
+        result_menus = [c for c in backend.captures if c.prompt == "Update Plugins"]
+        assert len(result_menus) == 1
+        messages = [i.title.lower() for i in result_menus[0].items]
+        assert any("up to date" in m for m in messages)
+
+
+class TestUpdateAvailableMenu:
+    """Tests for the updates available menu."""
+
+    def test_shows_update_available(
+        self, temp_dir: Path, sandbox_environment: Path
+    ) -> None:
+        """Shows plugin with available update in menu."""
+        from menu_kit.plugins.base import PluginInfo
+
+        # Installed version 1.0.0, repo has 2.0.0
+        class FakePlugin:
+            @property
+            def info(self) -> PluginInfo:
+                return PluginInfo(name="test-plugin", version="1.0.0")
+
+        mock_index = {
+            "version": 1,
+            "plugins": {
+                "test-plugin": {
+                    "version": "2.0.0",
+                    "description": "Test plugin",
+                    "download": "plugins/test-plugin",
+                },
+            },
+        }
+
+        ctx, backend = create_context(
+            temp_dir,
+            [
+                "plugins:updates",
+                "_back",  # Back from updates menu
+                "_back",
+            ],
+        )
+
+        class TrackingLoader:
+            def __init__(self) -> None:
+                self._plugins: dict[str, Plugin] = {}
+
+            def get_all_plugins(self) -> dict[str, Plugin]:
+                return self._plugins
+
+            def register(self, plugin: Plugin) -> None:
+                self._plugins[plugin.info.name] = plugin
+
+        loader = TrackingLoader()
+        loader.register(SettingsPlugin())
+        loader.register(PluginsPlugin())
+        loader.register(FakePlugin())  # type: ignore[arg-type]
+        ctx._loader = loader  # type: ignore[attr-defined]
+
+        plugin = PluginsPlugin()
+
+        with patch.object(plugin, "_fetch_repo_index", return_value=mock_index):
+            plugin.run(ctx)
+
+        # Should show updates available menu
+        update_menus = [c for c in backend.captures if c.prompt == "Updates Available"]
+        assert len(update_menus) == 1
+
+        # Should list the plugin with version badge
+        update_menu = update_menus[0]
+        plugin_items = [i for i in update_menu.items if i.id == "plugins:update:test-plugin"]
+        assert len(plugin_items) == 1
+        assert "1.0.0" in plugin_items[0].badge
+        assert "2.0.0" in plugin_items[0].badge
+
+    def test_shows_update_all_with_multiple_updates(
+        self, temp_dir: Path, sandbox_environment: Path
+    ) -> None:
+        """Shows 'Update All' option when multiple updates available."""
+        from menu_kit.plugins.base import PluginInfo
+
+        class FakePlugin1:
+            @property
+            def info(self) -> PluginInfo:
+                return PluginInfo(name="plugin-one", version="1.0.0")
+
+        class FakePlugin2:
+            @property
+            def info(self) -> PluginInfo:
+                return PluginInfo(name="plugin-two", version="1.0.0")
+
+        mock_index = {
+            "version": 1,
+            "plugins": {
+                "plugin-one": {"version": "2.0.0", "description": "One", "download": "plugins/plugin-one"},
+                "plugin-two": {"version": "2.0.0", "description": "Two", "download": "plugins/plugin-two"},
+            },
+        }
+
+        ctx, backend = create_context(
+            temp_dir,
+            [
+                "plugins:updates",
+                "_back",
+                "_back",
+            ],
+        )
+
+        class TrackingLoader:
+            def __init__(self) -> None:
+                self._plugins: dict[str, Plugin] = {}
+
+            def get_all_plugins(self) -> dict[str, Plugin]:
+                return self._plugins
+
+            def register(self, plugin: Plugin) -> None:
+                self._plugins[plugin.info.name] = plugin
+
+        loader = TrackingLoader()
+        loader.register(SettingsPlugin())
+        loader.register(PluginsPlugin())
+        loader.register(FakePlugin1())  # type: ignore[arg-type]
+        loader.register(FakePlugin2())  # type: ignore[arg-type]
+        ctx._loader = loader  # type: ignore[attr-defined]
+
+        plugin = PluginsPlugin()
+
+        with patch.object(plugin, "_fetch_repo_index", return_value=mock_index):
+            plugin.run(ctx)
+
+        update_menus = [c for c in backend.captures if c.prompt == "Updates Available"]
+        assert len(update_menus) == 1
+
+        # Should have "Update All" option
+        update_all_items = [i for i in update_menus[0].items if i.id == "plugins:update:all"]
+        assert len(update_all_items) == 1
+        assert "2 plugins" in update_all_items[0].badge
+
+
+class TestUpdateSinglePlugin:
+    """Tests for updating a single plugin."""
+
+    def test_update_single_plugin_success(
+        self, temp_dir: Path, sandbox_environment: Path
+    ) -> None:
+        """Successfully updates a single plugin."""
+        from unittest.mock import MagicMock
+
+        from menu_kit.plugins.base import PluginInfo
+
+        # Create plugin directory in sandboxed location
+        data_dir = sandbox_environment / "data"
+        plugins_dir = data_dir / "plugins"
+        plugins_dir.mkdir(parents=True, exist_ok=True)
+        test_plugin_dir = plugins_dir / "test-plugin"
+        test_plugin_dir.mkdir(exist_ok=True)
+        (test_plugin_dir / "__init__.py").write_text('"""Old version."""\n')
+
+        class FakePlugin:
+            @property
+            def info(self) -> PluginInfo:
+                return PluginInfo(name="test-plugin", version="1.0.0")
+
+        mock_index = {
+            "version": 1,
+            "plugins": {
+                "test-plugin": {
+                    "version": "2.0.0",
+                    "description": "Test plugin",
+                    "download": "plugins/test-plugin",
+                },
+            },
+        }
+
+        ctx, backend = create_context(
+            temp_dir,
+            [
+                "plugins:updates",
+                "plugins:update:test-plugin",  # Select plugin to update
+                "_done",  # Dismiss result screen
+                "_back",  # Back (updates menu is empty now)
+            ],
+        )
+
+        class TrackingLoader:
+            def __init__(self) -> None:
+                self._plugins: dict[str, Plugin] = {}
+
+            def get_all_plugins(self) -> dict[str, Plugin]:
+                return self._plugins
+
+            def register(self, plugin: Plugin) -> None:
+                self._plugins[plugin.info.name] = plugin
+
+            def unregister_plugin(self, name: str) -> bool:
+                if name in self._plugins:
+                    del self._plugins[name]
+                    return True
+                return False
+
+        loader = TrackingLoader()
+        loader.register(SettingsPlugin())
+        loader.register(PluginsPlugin())
+        loader.register(FakePlugin())  # type: ignore[arg-type]
+        ctx._loader = loader  # type: ignore[attr-defined]
+
+        plugin = PluginsPlugin()
+
+        mock_content = b'"""New version 2.0.0."""\n\ndef create_plugin(): pass\n'
+
+        with (
+            patch.object(plugin, "_fetch_repo_index", return_value=mock_index),
+            patch("menu_kit.plugins.builtin.plugins.urllib.request.urlopen") as mock_urlopen,
+        ):
+            mock_response = MagicMock()
+            mock_response.read.return_value = mock_content
+            mock_response.__enter__ = MagicMock(return_value=mock_response)
+            mock_response.__exit__ = MagicMock(return_value=False)
+            mock_urlopen.return_value = mock_response
+
+            with contextlib.suppress(MenuCancelled):
+                plugin.run(ctx)
+
+        # Verify success message was shown
+        result_menus = [c for c in backend.captures if c.prompt == "Update Plugin"]
+        assert len(result_menus) == 1
+        messages = [i.title.lower() for i in result_menus[0].items]
+        assert any("updated" in m and "success" in m for m in messages)
+
+        # Verify plugin was reinstalled
+        assert test_plugin_dir.exists()
+        content = (test_plugin_dir / "__init__.py").read_text()
+        assert "New version" in content

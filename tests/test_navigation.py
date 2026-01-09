@@ -364,10 +364,10 @@ class TestNavigationPaths:
         [
             # Back from plugins main
             (["_back"], ["Plugins"]),
-            # Check for updates action
+            # Check for updates action (shows result screen when no plugins installed)
             (
-                ["plugins:updates", "_back"],
-                ["Plugins", "Plugins"],
+                ["plugins:updates", "_done", "_back"],
+                ["Plugins", "Update Plugins", "Plugins"],
             ),
             # Navigate to Installed, then back
             (
@@ -534,20 +534,22 @@ class TestMenuItemBehavior:
         messages = [i.title.lower() for i in result_menu.items]
         assert any("cache" in m or "rebuilt" in m for m in messages)
 
-    def test_plugins_updates_shows_notification(
+    def test_plugins_updates_shows_result(
         self,
         temp_dir: Path,
-        capsys: pytest.CaptureFixture[str],
-        disable_notify_send: None,
     ) -> None:
-        """Selecting Check for Updates shows appropriate notification."""
-        ctx, _ = create_context(temp_dir, ["plugins:updates", "_back"])
+        """Selecting Check for Updates shows result screen."""
+        ctx, backend = create_context(temp_dir, ["plugins:updates", "_done", "_back"])
         plugin = PluginsPlugin()
 
         plugin.run(ctx)
 
-        captured = capsys.readouterr()
-        assert "update" in captured.out.lower()
+        # Should show "Update Plugins" result screen
+        result_menus = [c for c in backend.captures if c.prompt == "Update Plugins"]
+        assert len(result_menus) == 1
+        # With no installed plugins (only bundled), should show appropriate message
+        messages = [i.title.lower() for i in result_menus[0].items]
+        assert any("no installed" in m or "up to date" in m for m in messages)
 
     def test_plugins_installed_settings_toggle_shows_notification(
         self,

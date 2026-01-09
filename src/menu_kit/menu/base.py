@@ -106,8 +106,14 @@ def get_backend(name: str | None = None) -> MenuBackend | None:
                 return backend
         return None
 
-    # Auto-detect priority: rofi → dmenu → fuzzel → fzf → stdout
-    priority = [RofiBackend, DmenuBackend, FuzzelBackend, FzfBackend, StdoutBackend]
+    # Auto-detect priority - adjust for Wayland
+    if is_wayland():
+        # Wayland: fuzzel (native) → rofi (Xwayland) → dmenu → fzf → stdout
+        priority = [FuzzelBackend, RofiBackend, DmenuBackend, FzfBackend, StdoutBackend]
+    else:
+        # X11: rofi → dmenu → fuzzel → fzf → stdout
+        priority = [RofiBackend, DmenuBackend, FuzzelBackend, FzfBackend, StdoutBackend]
+
     for backend_class in priority:
         backend = backend_class()
         if backend.is_available():
@@ -124,3 +130,24 @@ def check_gui_backend_available() -> bool:
 
     backends: list[type[MenuBackend]] = [RofiBackend, DmenuBackend, FuzzelBackend]
     return any(backend_class().is_available() for backend_class in backends)
+
+
+def is_wayland() -> bool:
+    """Detect if running on Wayland.
+
+    Checks XDG_SESSION_TYPE and WAYLAND_DISPLAY environment variables.
+
+    Returns:
+        True if running on Wayland, False otherwise.
+    """
+    import os
+
+    session_type = os.environ.get("XDG_SESSION_TYPE", "").lower()
+    if session_type == "wayland":
+        return True
+
+    # Fallback: check if WAYLAND_DISPLAY is set
+    if os.environ.get("WAYLAND_DISPLAY"):
+        return True
+
+    return False

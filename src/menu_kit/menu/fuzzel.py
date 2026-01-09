@@ -34,7 +34,8 @@ class FuzzelBackend(MenuBackend):
         input_text = "\n".join(lines)
 
         # Use --index to return line number instead of text
-        cmd = ["fuzzel", "--dmenu", "--index"]
+        # Set width to 80 characters to prevent text cutoff
+        cmd = ["fuzzel", "--dmenu", "--index", "--width", "80"]
         if prompt:
             cmd.extend(["--prompt", f"{prompt}: "])
 

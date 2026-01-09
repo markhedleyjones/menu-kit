@@ -45,7 +45,7 @@ class PluginsPlugin(Plugin):
             items = [
                 MenuItem(
                     id="plugins:installed",
-                    title="View Installed Plugins",
+                    title="View/Configure Installed Plugins",
                     item_type=ItemType.SUBMENU,
                     badge=str(installed_count),
                 ),
@@ -70,7 +70,157 @@ class PluginsPlugin(Plugin):
             elif selected.id == "plugins:browse":
                 self._show_browse(ctx)
             elif selected.id == "plugins:updates":
-                ctx.notify("Update check not yet implemented")
+                self._check_for_updates(ctx)
+
+    def _version_is_newer(self, new_ver: str, current_ver: str) -> bool:
+        """Check if new_ver is newer than current_ver using semver-style comparison."""
+        try:
+            new_parts = [int(x) for x in new_ver.split(".")]
+            current_parts = [int(x) for x in current_ver.split(".")]
+            # Pad to same length
+            max_len = max(len(new_parts), len(current_parts))
+            new_parts.extend([0] * (max_len - len(new_parts)))
+            current_parts.extend([0] * (max_len - len(current_parts)))
+            return new_parts > current_parts
+        except (ValueError, AttributeError):
+            # If parsing fails, do string comparison
+            return new_ver > current_ver
+
+    def _check_for_updates(self, ctx: PluginContext) -> None:
+        """Check for plugin updates and show update menu."""
+        installed = ctx.get_installed_plugins()
+        bundled_plugins = {"settings", "plugins"}
+
+        # Get non-bundled plugins
+        updatable_plugins = {
+            name: info for name, info in installed.items() if name not in bundled_plugins
+        }
+
+        if not updatable_plugins:
+            ctx.show_result("No installed plugins to check", prompt="Update Plugins")
+            return
+
+        # Check each repository for updates
+        repos = ctx.config.plugins.repositories
+        updates_available: dict[str, tuple[str, str, str, dict[str, Any]]] = {}
+
+        for repo in repos:
+            index = self._fetch_repo_index(repo)
+            if index is None:
+                continue
+
+            plugins = index.get("plugins", {})
+            for name, info in plugins.items():
+                if name in updatable_plugins:
+                    current_ver = updatable_plugins[name].version
+                    new_ver = info.get("version", "0.0.0")
+                    if self._version_is_newer(new_ver, current_ver):
+                        updates_available[name] = (current_ver, new_ver, repo, info)
+
+        if not updates_available:
+            ctx.show_result("All plugins are up to date", prompt="Update Plugins")
+            return
+
+        self._show_updates_menu(ctx, updates_available)
+
+    def _show_updates_menu(
+        self,
+        ctx: PluginContext,
+        updates: dict[str, tuple[str, str, str, dict[str, Any]]],
+    ) -> None:
+        """Show menu with available updates."""
+        while True:
+            items = []
+
+            # Add "Update All" if multiple updates
+            if len(updates) > 1:
+                items.append(
+                    MenuItem(
+                        id="plugins:update:all",
+                        title="Update All",
+                        item_type=ItemType.ACTION,
+                        badge=f"{len(updates)} plugins",
+                    )
+                )
+
+            # List individual plugins with updates
+            for name, (current_ver, new_ver, repo, info) in sorted(updates.items()):
+                items.append(
+                    MenuItem(
+                        id=f"plugins:update:{name}",
+                        title=name,
+                        item_type=ItemType.ACTION,
+                        badge=f"{current_ver} → {new_ver}",
+                        metadata={"repo": repo, "info": info},
+                    )
+                )
+
+            selected = ctx.menu(items, prompt="Updates Available")
+            if selected is None:
+                return
+
+            if selected.id == "plugins:update:all":
+                self._update_all_plugins(ctx, updates)
+                return
+            elif selected.id.startswith("plugins:update:"):
+                plugin_name = selected.id.replace("plugins:update:", "")
+                if plugin_name in updates:
+                    current_ver, new_ver, repo, info = updates[plugin_name]
+                    self._update_single_plugin(ctx, plugin_name, repo, info)
+                    # Remove from updates dict after successful update
+                    del updates[plugin_name]
+                    if not updates:
+                        return
+
+    def _update_single_plugin(
+        self,
+        ctx: PluginContext,
+        plugin_name: str,
+        repo: str,
+        plugin_info: dict[str, Any],
+    ) -> bool:
+        """Update a single plugin by reinstalling it."""
+        # Uninstall first
+        if not self._uninstall_plugin(ctx, plugin_name):
+            ctx.show_result(f"Failed to remove old version of '{plugin_name}'", prompt="Update Plugin")
+            return False
+
+        # Reinstall
+        if self._install_plugin(ctx, repo, plugin_name, plugin_info):
+            ctx.show_result(f"Plugin '{plugin_name}' updated successfully", prompt="Update Plugin")
+            return True
+        else:
+            ctx.show_result(f"Failed to install new version of '{plugin_name}'", prompt="Update Plugin")
+            return False
+
+    def _update_all_plugins(
+        self,
+        ctx: PluginContext,
+        updates: dict[str, tuple[str, str, str, dict[str, Any]]],
+    ) -> None:
+        """Update all plugins with available updates."""
+        success_count = 0
+        fail_count = 0
+
+        for name, (current_ver, new_ver, repo, info) in updates.items():
+            # Uninstall old
+            if not self._uninstall_plugin(ctx, name):
+                fail_count += 1
+                continue
+
+            # Install new
+            if self._install_plugin(ctx, repo, name, info):
+                success_count += 1
+            else:
+                fail_count += 1
+
+        # Show result
+        if fail_count == 0:
+            message = f"Updated {success_count} plugin(s) successfully"
+        else:
+            message = f"Updated {success_count}, failed {fail_count}"
+
+        ctx.show_result(message, prompt="Update Plugins")
 
     def _show_installed(self, ctx: PluginContext) -> None:
         """Show installed plugins."""
