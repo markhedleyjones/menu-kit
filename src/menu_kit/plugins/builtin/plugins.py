@@ -270,17 +270,10 @@ class PluginsPlugin(Plugin):
         if info is None:
             return
 
+        # Plugins that only have submenu items (no individual items to inline)
+        submenu_only_plugins = {"settings", "plugins"}
+
         while True:
-            current_mode = display_manager.get_mode(plugin_name)
-
-            # Build toggle label
-            if current_mode == DisplayMode.INLINE:
-                toggle_label = "Change to Submenu"
-                toggle_badge = "currently inline"
-            else:
-                toggle_label = "Change to Inline"
-                toggle_badge = "currently submenu"
-
             items = [
                 MenuItem(
                     id=f"plugins:opt:{plugin_name}:info",
@@ -288,13 +281,28 @@ class PluginsPlugin(Plugin):
                     item_type=ItemType.INFO,
                     badge=f"v{info.version}",
                 ),
-                MenuItem(
-                    id=f"plugins:opt:{plugin_name}:toggle",
-                    title=toggle_label,
-                    item_type=ItemType.ACTION,
-                    badge=toggle_badge,
-                ),
             ]
+
+            # Only show display mode toggle for plugins with individual items
+            if plugin_name not in submenu_only_plugins:
+                current_mode = display_manager.get_mode(plugin_name)
+
+                # Build toggle label
+                if current_mode == DisplayMode.INLINE:
+                    toggle_label = "Change to Submenu"
+                    toggle_badge = "currently inline"
+                else:
+                    toggle_label = "Change to Inline"
+                    toggle_badge = "currently submenu"
+
+                items.append(
+                    MenuItem(
+                        id=f"plugins:opt:{plugin_name}:toggle",
+                        title=toggle_label,
+                        item_type=ItemType.ACTION,
+                        badge=toggle_badge,
+                    )
+                )
 
             # Add uninstall option for non-bundled plugins
             bundled_plugins = {"settings", "plugins"}

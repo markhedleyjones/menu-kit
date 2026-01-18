@@ -390,8 +390,8 @@ class TestInstalledPluginsScreen:
 class TestPluginOptionsScreen:
     """Tests for the plugin options screen."""
 
-    def test_plugin_options_shows_info_and_toggle(self, temp_dir: Path) -> None:
-        """Plugin options screen shows info and display mode toggle."""
+    def test_plugin_options_shows_info(self, temp_dir: Path) -> None:
+        """Plugin options screen shows info."""
         ctx, backend = create_context(
             temp_dir,
             [
@@ -413,12 +413,9 @@ class TestPluginOptionsScreen:
         info_items = [i for i in options_menu.items if ":info" in i.id]
         assert len(info_items) >= 1
 
-        # Should have toggle option
+        # Settings/Plugins should NOT have toggle (submenu-only plugins)
         toggle_items = [i for i in options_menu.items if ":toggle" in i.id]
-        assert len(toggle_items) == 1
-        # Toggle should show current mode
-        assert toggle_items[0].badge is not None
-        assert "inline" in toggle_items[0].badge or "submenu" in toggle_items[0].badge
+        assert len(toggle_items) == 0
 
     def test_bundled_plugins_no_uninstall_option(self, temp_dir: Path) -> None:
         """Bundled plugins (settings, plugins) don't show uninstall option."""

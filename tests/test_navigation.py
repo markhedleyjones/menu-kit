@@ -551,19 +551,16 @@ class TestMenuItemBehavior:
         messages = [i.title.lower() for i in result_menus[0].items]
         assert any("no installed" in m or "up to date" in m for m in messages)
 
-    def test_plugins_installed_settings_toggle_shows_notification(
+    def test_plugins_settings_has_no_toggle(
         self,
         temp_dir: Path,
-        capsys: pytest.CaptureFixture[str],
-        disable_notify_send: None,
     ) -> None:
-        """Toggling display mode in plugin options shows notification."""
-        ctx, _ = create_context(
+        """Settings plugin should not have display mode toggle (submenu-only)."""
+        ctx, backend = create_context(
             temp_dir,
             [
                 "plugins:installed",
                 "plugins:info:settings",
-                "plugins:opt:settings:toggle",
                 "_back",
                 "_back",
                 "_back",
@@ -573,22 +570,25 @@ class TestMenuItemBehavior:
 
         plugin.run(ctx)
 
-        captured = capsys.readouterr()
-        assert "display mode" in captured.out.lower()
+        # Find the settings options menu
+        options_menus = [c for c in backend.captures if c.prompt == "Settings"]
+        assert len(options_menus) == 1
 
-    def test_plugins_installed_plugins_toggle_shows_notification(
+        options_menu = options_menus[0]
+        # Should NOT have toggle item for settings
+        toggle_items = [i for i in options_menu.items if ":toggle" in i.id]
+        assert len(toggle_items) == 0
+
+    def test_plugins_plugins_has_no_toggle(
         self,
         temp_dir: Path,
-        capsys: pytest.CaptureFixture[str],
-        disable_notify_send: None,
     ) -> None:
-        """Toggling display mode in plugin options shows notification."""
-        ctx, _ = create_context(
+        """Plugins plugin should not have display mode toggle (submenu-only)."""
+        ctx, backend = create_context(
             temp_dir,
             [
                 "plugins:installed",
                 "plugins:info:plugins",
-                "plugins:opt:plugins:toggle",
                 "_back",
                 "_back",
                 "_back",
@@ -598,8 +598,17 @@ class TestMenuItemBehavior:
 
         plugin.run(ctx)
 
-        captured = capsys.readouterr()
-        assert "display mode" in captured.out.lower()
+        # Find the plugins options menu (has info item)
+        options_menus = [
+            c for c in backend.captures
+            if c.prompt == "Plugins" and any(":info" in i.id for i in c.items)
+        ]
+        assert len(options_menus) == 1
+
+        options_menu = options_menus[0]
+        # Should NOT have toggle item for plugins
+        toggle_items = [i for i in options_menu.items if ":toggle" in i.id]
+        assert len(toggle_items) == 0
 
     def test_plugins_browse_repo_shows_plugins_or_error(
         self,
