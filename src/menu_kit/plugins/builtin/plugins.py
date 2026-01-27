@@ -40,14 +40,19 @@ class PluginsPlugin(Plugin):
 
     def _show_main_menu(self, ctx: PluginContext) -> None:
         """Show main plugins menu."""
+        bundled_plugins = {"settings", "plugins"}
+
         while True:
-            installed_count = len(ctx.get_installed_plugins())
+            installed = ctx.get_installed_plugins()
+            # Only count non-core plugins
+            configurable_count = len([n for n in installed if n not in bundled_plugins])
+
             items = [
                 MenuItem(
                     id="plugins:installed",
                     title="View/Configure Installed Plugins",
                     item_type=ItemType.SUBMENU,
-                    badge=str(installed_count),
+                    badge=str(configurable_count) if configurable_count > 0 else None,
                 ),
                 MenuItem(
                     id="plugins:browse",
@@ -225,21 +230,25 @@ class PluginsPlugin(Plugin):
     def _show_installed(self, ctx: PluginContext) -> None:
         """Show installed plugins."""
         display_manager = DisplayModeManager(ctx.config, ctx.database)
+        bundled_plugins = {"settings", "plugins"}
 
         while True:
             installed = ctx.get_installed_plugins()
+
+            # Filter out core plugins that can't be configured
+            configurable = {
+                name: info for name, info in installed.items()
+                if name not in bundled_plugins
+            }
+
             items = []
 
-            for name, info in sorted(installed.items()):
+            for name, info in sorted(configurable.items()):
                 # Get display mode for this plugin
                 mode = display_manager.get_mode(name)
                 mode_label = mode.value
 
-                # Determine if bundled
-                bundled_plugins = {"settings", "plugins"}
-                source = "bundled" if name in bundled_plugins else "installed"
-
-                badge = f"{info.version} ({source}) | {mode_label}"
+                badge = f"{info.version} | {mode_label}"
 
                 items.append(
                     MenuItem(

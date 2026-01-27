@@ -353,8 +353,8 @@ class TestPluginInstallFlow:
 class TestInstalledPluginsScreen:
     """Tests for the Installed Plugins screen."""
 
-    def test_installed_shows_bundled_plugins(self, temp_dir: Path) -> None:
-        """Installed plugins screen shows bundled plugins."""
+    def test_installed_excludes_core_plugins(self, temp_dir: Path) -> None:
+        """Installed plugins screen excludes core plugins."""
         ctx, backend = create_context(temp_dir, ["plugins:installed", "_back", "_back"])
         plugin = PluginsPlugin()
 
@@ -365,79 +365,19 @@ class TestInstalledPluginsScreen:
 
         plugin_items = [i for i in installed_menu.items if i.id.startswith("plugins:info:")]
 
-        # Should show settings and plugins (bundled)
+        # Should NOT show settings and plugins (core plugins are filtered)
         plugin_ids = [i.id for i in plugin_items]
-        assert "plugins:info:settings" in plugin_ids
-        assert "plugins:info:plugins" in plugin_ids
+        assert "plugins:info:settings" not in plugin_ids
+        assert "plugins:info:plugins" not in plugin_ids
+        # Should be empty (no configurable plugins installed)
+        assert len(plugin_items) == 0
 
-    def test_installed_shows_version_and_source(self, temp_dir: Path) -> None:
-        """Installed plugins show version and source (bundled/installed) in badge."""
-        ctx, backend = create_context(temp_dir, ["plugins:installed", "_back", "_back"])
-        plugin = PluginsPlugin()
-
-        plugin.run(ctx)
-
-        installed_menu = backend.captures[1]
-        plugin_items = [i for i in installed_menu.items if i.id.startswith("plugins:info:")]
-
-        for item in plugin_items:
-            assert item.badge is not None
-            # Should contain version and source
-            assert "." in item.badge  # Version
-            assert "bundled" in item.badge or "installed" in item.badge
 
 
 class TestPluginOptionsScreen:
     """Tests for the plugin options screen."""
 
-    def test_plugin_options_shows_info(self, temp_dir: Path) -> None:
-        """Plugin options screen shows info."""
-        ctx, backend = create_context(
-            temp_dir,
-            [
-                "plugins:installed",
-                "plugins:info:settings",
-                "_back",
-                "_back",
-                "_back",
-            ],
-        )
-        plugin = PluginsPlugin()
 
-        plugin.run(ctx)
-
-        # Find the options menu (prompt is plugin name title-cased)
-        options_menu = next(c for c in backend.captures if c.prompt == "Settings")
-
-        # Should have info item with version
-        info_items = [i for i in options_menu.items if ":info" in i.id]
-        assert len(info_items) >= 1
-
-        # Settings/Plugins should NOT have toggle (submenu-only plugins)
-        toggle_items = [i for i in options_menu.items if ":toggle" in i.id]
-        assert len(toggle_items) == 0
-
-    def test_bundled_plugins_no_uninstall_option(self, temp_dir: Path) -> None:
-        """Bundled plugins (settings, plugins) don't show uninstall option."""
-        ctx, backend = create_context(
-            temp_dir,
-            [
-                "plugins:installed",
-                "plugins:info:settings",
-                "_back",
-                "_back",
-                "_back",
-            ],
-        )
-        plugin = PluginsPlugin()
-
-        plugin.run(ctx)
-
-        options_menu = next(c for c in backend.captures if c.prompt == "Settings")
-
-        # Should NOT have uninstall option for bundled plugin
-        uninstall_items = [i for i in options_menu.items if ":uninstall" in i.id]
-        assert len(uninstall_items) == 0
 
 
 class TestPluginUninstallFlow:

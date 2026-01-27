@@ -197,7 +197,7 @@ class TestPluginsNavigation:
         assert "plugins:updates" in item_ids
 
     def test_plugins_installed_menu(self, temp_dir: Path) -> None:
-        """Navigating to Installed shows installed plugins."""
+        """Navigating to Installed shows installed plugins (excluding core)."""
         ctx, backend = create_context(temp_dir, ["plugins:installed", "_back", "_back"])
         plugin = PluginsPlugin()
 
@@ -208,13 +208,14 @@ class TestPluginsNavigation:
         # First menu: Plugins main
         assert backend.captures[0].prompt == "Plugins"
 
-        # Second menu: Installed Plugins
+        # Second menu: Installed Plugins (empty - core plugins filtered out)
         installed_menu = backend.captures[1]
         assert installed_menu.prompt == "Installed Plugins"
         item_ids = [item.id for item in installed_menu.items]
         assert "_back" in item_ids
-        assert "plugins:info:settings" in item_ids
-        assert "plugins:info:plugins" in item_ids
+        # Core plugins (settings, plugins) should NOT appear
+        assert "plugins:info:settings" not in item_ids
+        assert "plugins:info:plugins" not in item_ids
 
         # Third menu: Back to Plugins main
         assert backend.captures[2].prompt == "Plugins"
@@ -231,13 +232,11 @@ class TestPluginsNavigation:
         assert prompts == ["Plugins", "Official", "Plugins"]
 
     def test_plugins_deep_navigation(self, temp_dir: Path) -> None:
-        """Test deep navigation: Plugins → Installed → plugin options → back → back → back."""
+        """Test navigation: Plugins → Installed → back → back."""
         ctx, backend = create_context(
             temp_dir,
             [
-                "plugins:installed",  # Go to Installed
-                "plugins:info:settings",  # Select settings plugin (shows options)
-                "_back",  # Back to Installed
+                "plugins:installed",  # Go to Installed (empty)
                 "_back",  # Back to Plugins main
                 "_back",  # Exit plugin
             ],
@@ -249,9 +248,7 @@ class TestPluginsNavigation:
         prompts = [c.prompt for c in backend.captures]
         assert prompts == [
             "Plugins",
-            "Installed Plugins",
-            "Settings",  # Plugin options menu
-            "Installed Plugins",  # After back from options
+            "Installed Plugins",  # Empty (no configurable plugins)
             "Plugins",  # After back from Installed
         ]
 
@@ -379,61 +376,6 @@ class TestNavigationPaths:
                 ["plugins:browse", "_back", "_back"],
                 ["Plugins", "Official", "Plugins"],
             ),
-            # Select settings plugin in Installed, then back out
-            (
-                [
-                    "plugins:installed",
-                    "plugins:info:settings",
-                    "_back",
-                    "_back",
-                    "_back",
-                ],
-                [
-                    "Plugins",
-                    "Installed Plugins",
-                    "Settings",
-                    "Installed Plugins",
-                    "Plugins",
-                ],
-            ),
-            # Select plugins plugin in Installed, then back out
-            (
-                [
-                    "plugins:installed",
-                    "plugins:info:plugins",
-                    "_back",
-                    "_back",
-                    "_back",
-                ],
-                [
-                    "Plugins",
-                    "Installed Plugins",
-                    "Plugins",
-                    "Installed Plugins",
-                    "Plugins",
-                ],
-            ),
-            # Browse both installed plugins before backing out
-            (
-                [
-                    "plugins:installed",
-                    "plugins:info:settings",
-                    "_back",
-                    "plugins:info:plugins",
-                    "_back",
-                    "_back",
-                    "_back",
-                ],
-                [
-                    "Plugins",
-                    "Installed Plugins",
-                    "Settings",
-                    "Installed Plugins",
-                    "Plugins",
-                    "Installed Plugins",
-                    "Plugins",
-                ],
-            ),
             # Visit both submenus in one session (browse skips to repo with one repo)
             (
                 [
@@ -551,64 +493,6 @@ class TestMenuItemBehavior:
         messages = [i.title.lower() for i in result_menus[0].items]
         assert any("no installed" in m or "up to date" in m for m in messages)
 
-    def test_plugins_settings_has_no_toggle(
-        self,
-        temp_dir: Path,
-    ) -> None:
-        """Settings plugin should not have display mode toggle (submenu-only)."""
-        ctx, backend = create_context(
-            temp_dir,
-            [
-                "plugins:installed",
-                "plugins:info:settings",
-                "_back",
-                "_back",
-                "_back",
-            ],
-        )
-        plugin = PluginsPlugin()
-
-        plugin.run(ctx)
-
-        # Find the settings options menu
-        options_menus = [c for c in backend.captures if c.prompt == "Settings"]
-        assert len(options_menus) == 1
-
-        options_menu = options_menus[0]
-        # Should NOT have toggle item for settings
-        toggle_items = [i for i in options_menu.items if ":toggle" in i.id]
-        assert len(toggle_items) == 0
-
-    def test_plugins_plugins_has_no_toggle(
-        self,
-        temp_dir: Path,
-    ) -> None:
-        """Plugins plugin should not have display mode toggle (submenu-only)."""
-        ctx, backend = create_context(
-            temp_dir,
-            [
-                "plugins:installed",
-                "plugins:info:plugins",
-                "_back",
-                "_back",
-                "_back",
-            ],
-        )
-        plugin = PluginsPlugin()
-
-        plugin.run(ctx)
-
-        # Find the plugins options menu (has info item)
-        options_menus = [
-            c for c in backend.captures
-            if c.prompt == "Plugins" and any(":info" in i.id for i in c.items)
-        ]
-        assert len(options_menus) == 1
-
-        options_menu = options_menus[0]
-        # Should NOT have toggle item for plugins
-        toggle_items = [i for i in options_menu.items if ":toggle" in i.id]
-        assert len(toggle_items) == 0
 
     def test_plugins_browse_repo_shows_plugins_or_error(
         self,
@@ -661,21 +545,20 @@ class TestMenuItemBehavior:
         # Default is empty string which displays as "auto"
         assert backend_item.badge == "auto"
 
-    def test_plugins_installed_shows_version_badges(self, temp_dir: Path) -> None:
-        """Installed plugins show version info in badges."""
+    def test_plugins_installed_excludes_core_plugins(self, temp_dir: Path) -> None:
+        """Installed plugins list excludes core plugins (settings, plugins)."""
         ctx, backend = create_context(temp_dir, ["plugins:installed", "_back", "_back"])
         plugin = PluginsPlugin()
 
         plugin.run(ctx)
 
         installed_menu = backend.captures[1]
-        for item in installed_menu.items:
-            if item.id.startswith("plugins:info:"):
-                assert item.badge is not None
-                assert "bundled" in item.badge or "0." in item.badge
+        # Should have no plugin items (only back button) since core plugins are filtered
+        plugin_items = [i for i in installed_menu.items if i.id.startswith("plugins:info:")]
+        assert len(plugin_items) == 0
 
     def test_plugins_main_shows_installed_count(self, temp_dir: Path) -> None:
-        """Installed submenu shows count badge."""
+        """Installed submenu shows count badge (only non-core plugins)."""
         ctx, backend = create_context(temp_dir, ["_back"])
         plugin = PluginsPlugin()
 
@@ -683,9 +566,8 @@ class TestMenuItemBehavior:
 
         menu = backend.captures[0]
         installed_item = next(i for i in menu.items if i.id == "plugins:installed")
-        assert installed_item.badge is not None
-        # Should show a number (currently hardcoded to "2")
-        assert installed_item.badge.isdigit() or installed_item.badge == "2"
+        # Badge should be None when no configurable plugins installed (core plugins excluded)
+        assert installed_item.badge is None
 
     def test_plugins_browse_shows_official_not_path(self, temp_dir: Path) -> None:
         """Official repository shows as 'Official' not the repo path."""
