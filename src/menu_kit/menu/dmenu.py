@@ -23,6 +23,7 @@ class DmenuBackend(MenuBackend):
         items: list[MenuItem],
         prompt: str = "",
         extra_args: list[str] | None = None,
+        selected_row: int | None = None,
     ) -> MenuResult:
         """Display menu using dmenu and return selection."""
         item_map: dict[str, MenuItem] = {}

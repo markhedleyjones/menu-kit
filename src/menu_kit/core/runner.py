@@ -349,8 +349,8 @@ class Runner:
         """Show items for a plugin in submenu mode.
 
         Returns:
-            ActionResult.CLOSE if a plugin action completed (caller should exit).
-            ActionResult.BACK if user navigated back (caller should continue).
+            ActionResult.CLOSE if a plugin action completed or ESC pressed.
+            ActionResult.BACK if user selected Back (navigate to main menu).
         """
         assert self.database is not None
         assert self.backend is not None
@@ -366,17 +366,25 @@ class Runner:
             if not items:
                 return ActionResult.BACK
 
-            # Add back button
-            items.append(MenuItem(id="_back", title="Back", item_type=ItemType.ACTION))
+            # Add back button at the right position
+            back_item = MenuItem(id="_back", title="Back", item_type=ItemType.ACTION)
+            selected_row: int | None = None
 
-            result = self.backend.show(items, prompt=prompt)
+            if self.backend.supports_selected_row:
+                items.insert(0, back_item)
+                selected_row = min(1, len(items) - 1)
+            else:
+                pos = min(1, len(items))
+                items.insert(pos, back_item)
 
-            # ESC or Back: go back to main menu
-            if (
-                result.cancelled
-                or result.selected is None
-                or result.selected.id == "_back"
-            ):
+            result = self.backend.show(items, prompt=prompt, selected_row=selected_row)
+
+            # ESC: close the entire menu
+            if result.cancelled or result.selected is None:
+                return ActionResult.CLOSE
+
+            # Back button: go back to main menu
+            if result.selected.id == "_back":
                 return ActionResult.BACK
 
             item = result.selected

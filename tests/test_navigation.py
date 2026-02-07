@@ -50,6 +50,7 @@ class MockBackend(MenuBackend):
         items: list[MenuItem],
         prompt: str = "",
         extra_args: list[str] | None = None,
+        selected_row: int | None = None,
     ) -> MenuResult:
         """Record the menu and return next scripted selection."""
         self.captures.append(MenuCapture(items=list(items), prompt=prompt))
@@ -627,8 +628,8 @@ class TestMenuItemConsistency:
             for item in capture.items:
                 assert item.title, f"Item '{item.id}' has empty title"
 
-    def test_back_button_always_last(self, temp_dir: Path) -> None:
-        """Back button should always be the last item when present."""
+    def test_back_button_near_top(self, temp_dir: Path) -> None:
+        """Back button should be near the top (position 0 or 1) when present."""
         ctx, backend = create_context(
             temp_dir,
             ["plugins:installed", "_back", "plugins:browse", "_back", "_back"],
@@ -641,7 +642,7 @@ class TestMenuItemConsistency:
                 i for i, item in enumerate(capture.items) if item.id == "_back"
             ]
             if back_items:
-                expected_pos = len(capture.items) - 1
-                assert back_items[0] == expected_pos, (
-                    f"Back button not last in '{capture.prompt}'"
+                assert back_items[0] <= 1, (
+                    f"Back button not near top in '{capture.prompt}' "
+                    f"(position {back_items[0]})"
                 )

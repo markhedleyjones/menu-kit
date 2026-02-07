@@ -198,8 +198,8 @@ class PluginLoader:
                 return ActionResult.CLOSE
             return result
         except MenuCancelled:
-            # Legacy plugins that let MenuCancelled propagate
-            return ActionResult.BACK
+            # User pressed ESC - close the entire menu
+            return ActionResult.CLOSE
         except Exception as e:
             print(f"Error running plugin {name}: {e}")
             return ActionResult.CLOSE

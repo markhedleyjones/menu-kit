@@ -27,6 +27,11 @@ class MenuBackend(ABC):
         """Backend identifier."""
         ...
 
+    @property
+    def supports_selected_row(self) -> bool:
+        """Whether this backend supports highlighting a specific row."""
+        return False
+
     @abstractmethod
     def is_available(self) -> bool:
         """Check if this backend is installed."""
@@ -38,6 +43,7 @@ class MenuBackend(ABC):
         items: list[MenuItem],
         prompt: str = "",
         extra_args: list[str] | None = None,
+        selected_row: int | None = None,
     ) -> MenuResult:
         """Display menu and return the selection."""
         ...
@@ -147,7 +153,4 @@ def is_wayland() -> bool:
         return True
 
     # Fallback: check if WAYLAND_DISPLAY is set
-    if os.environ.get("WAYLAND_DISPLAY"):
-        return True
-
-    return False
+    return bool(os.environ.get("WAYLAND_DISPLAY"))

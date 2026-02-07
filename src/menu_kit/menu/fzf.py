@@ -23,6 +23,7 @@ class FzfBackend(MenuBackend):
         items: list[MenuItem],
         prompt: str = "",
         extra_args: list[str] | None = None,
+        selected_row: int | None = None,
     ) -> MenuResult:
         """Display menu using fzf and return selection."""
         # Build the input

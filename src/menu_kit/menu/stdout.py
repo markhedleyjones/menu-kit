@@ -24,6 +24,7 @@ class StdoutBackend(MenuBackend):
         items: list[MenuItem],
         prompt: str = "",
         extra_args: list[str] | None = None,
+        selected_row: int | None = None,
     ) -> MenuResult:
         """Print items to stdout, no selection."""
         for item in items:

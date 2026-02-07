@@ -15,6 +15,10 @@ class RofiBackend(MenuBackend):
     def name(self) -> str:
         return "rofi"
 
+    @property
+    def supports_selected_row(self) -> bool:
+        return True
+
     def is_available(self) -> bool:
         return self._check_command("rofi")
 
@@ -23,6 +27,7 @@ class RofiBackend(MenuBackend):
         items: list[MenuItem],
         prompt: str = "",
         extra_args: list[str] | None = None,
+        selected_row: int | None = None,
     ) -> MenuResult:
         """Display menu using rofi and return selection."""
         lines: list[str] = []
@@ -38,6 +43,9 @@ class RofiBackend(MenuBackend):
         cmd = ["rofi", "-dmenu", "-i", "-format", "i"]
         if prompt:
             cmd.extend(["-p", prompt])
+
+        if selected_row is not None:
+            cmd.extend(["-selected-row", str(selected_row)])
 
         if extra_args:
             cmd.extend(extra_args)

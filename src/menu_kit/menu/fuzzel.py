@@ -15,6 +15,10 @@ class FuzzelBackend(MenuBackend):
     def name(self) -> str:
         return "fuzzel"
 
+    @property
+    def supports_selected_row(self) -> bool:
+        return True
+
     def is_available(self) -> bool:
         return self._check_command("fuzzel")
 
@@ -23,6 +27,7 @@ class FuzzelBackend(MenuBackend):
         items: list[MenuItem],
         prompt: str = "",
         extra_args: list[str] | None = None,
+        selected_row: int | None = None,
     ) -> MenuResult:
         """Display menu using fuzzel and return selection."""
         lines: list[str] = []
@@ -38,6 +43,9 @@ class FuzzelBackend(MenuBackend):
         cmd = ["fuzzel", "--dmenu", "--index", "--width", "80"]
         if prompt:
             cmd.extend(["--prompt", f"{prompt}: "])
+
+        if selected_row is not None:
+            cmd.extend(["--select-index", str(selected_row)])
 
         if extra_args:
             cmd.extend(extra_args)

@@ -33,10 +33,13 @@ BACK_SELECTED = object()
 
 
 class MenuCancelled(Exception):
-    """Raised when user cancels (ESC) the menu.
+    """Raised when user presses ESC in a menu.
 
-    Deprecated: ESC now returns None (same as Back) from ctx.menu().
-    Kept for backwards compatibility with plugins that catch this exception.
+    ESC means "close the entire menu". This propagates up through the plugin
+    to the loader, which catches it and returns ActionResult.CLOSE.
+
+    Plugins should NOT catch this unless they need custom ESC handling.
+    Use the Back menu item (returned as None from ctx.menu()) for navigation.
     """
 
 
@@ -62,24 +65,36 @@ class PluginContext:
             show_back: Whether to show a back button (default True)
 
         Returns:
-            Selected MenuItem, or None if back/ESC selected
+            Selected MenuItem, or None if Back selected.
+
+        Raises:
+            MenuCancelled: If user presses ESC (closes entire menu).
         """
         display_items = list(items)
+        selected_row: int | None = None
 
-        # Add back button at the bottom if enabled
         if show_back:
             back_item = MenuItem(
                 id="_back",
                 title="Back",
                 item_type=ItemType.ACTION,
             )
-            display_items.append(back_item)
+            if self.menu_backend.supports_selected_row:
+                # Back at top, highlight first real item
+                display_items.insert(0, back_item)
+                selected_row = min(1, len(display_items) - 1)
+            else:
+                # Back at second position (one press up from default)
+                pos = min(1, len(display_items))
+                display_items.insert(pos, back_item)
 
-        result = self.menu_backend.show(display_items, prompt)
+        result = self.menu_backend.show(
+            display_items, prompt, selected_row=selected_row
+        )
 
-        # ESC and Back both mean "go back one level"
+        # ESC closes the entire menu
         if result.cancelled:
-            return None
+            raise MenuCancelled()
 
         if result.selected and result.selected.id == "_back":
             return None

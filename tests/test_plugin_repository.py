@@ -56,6 +56,7 @@ class MockBackend(MenuBackend):
         items: list[MenuItem],
         prompt: str = "",
         extra_args: list[str] | None = None,
+        selected_row: int | None = None,
     ) -> MenuResult:
         """Record the menu and return next scripted selection."""
         self.captures.append(MenuCapture(items=list(items), prompt=prompt))
