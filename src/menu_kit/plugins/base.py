@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from menu_kit.core.database import ItemType, MenuItem
@@ -15,6 +16,18 @@ if TYPE_CHECKING:
     from menu_kit.plugins.loader import PluginLoader
 
 
+class ActionResult(Enum):
+    """Flow control signal returned by plugin actions.
+
+    Plugins return this from run() to tell the runner what to do next:
+    - CLOSE: Action completed, close the entire menu (launcher behaviour).
+    - BACK: Go back to the previous menu level.
+    """
+
+    CLOSE = "close"
+    BACK = "back"
+
+
 # Sentinel for back navigation
 BACK_SELECTED = object()
 
@@ -22,8 +35,8 @@ BACK_SELECTED = object()
 class MenuCancelled(Exception):
     """Raised when user cancels (ESC) the menu.
 
-    This exception propagates up to exit the entire plugin menu tree,
-    rather than just going back one level like the Back button.
+    Deprecated: ESC now returns None (same as Back) from ctx.menu().
+    Kept for backwards compatibility with plugins that catch this exception.
     """
 
 
@@ -49,10 +62,7 @@ class PluginContext:
             show_back: Whether to show a back button (default True)
 
         Returns:
-            Selected MenuItem, or None if back button selected
-
-        Raises:
-            MenuCancelled: If user presses ESC (cancels the menu)
+            Selected MenuItem, or None if back/ESC selected
         """
         display_items = list(items)
 
@@ -67,8 +77,9 @@ class PluginContext:
 
         result = self.menu_backend.show(display_items, prompt)
 
+        # ESC and Back both mean "go back one level"
         if result.cancelled:
-            raise MenuCancelled()
+            return None
 
         if result.selected and result.selected.id == "_back":
             return None
@@ -201,12 +212,18 @@ class Plugin(ABC):
         """Called when plugin is unloaded. Optional override."""
 
     @abstractmethod
-    def run(self, ctx: PluginContext, action: str = "") -> None:
+    def run(self, ctx: PluginContext, action: str = "") -> ActionResult | None:
         """Called when user selects this plugin.
 
         Args:
             ctx: Plugin context for accessing core functionality
             action: Sub-action if invoked via -p plugin:action
+
+        Returns:
+            ActionResult controlling menu flow:
+            - CLOSE: action completed, close the entire menu
+            - BACK: go back to the previous menu level
+            - None: treated as CLOSE (backwards compatible default)
         """
         ...
 

@@ -155,16 +155,19 @@ class TestSettingsNavigation:
         assert "settings:rebuild" in item_ids
 
     def test_settings_frequency_action(self, temp_dir: Path) -> None:
-        """Selecting frequency tracking shows notification and returns to settings."""
-        ctx, backend = create_context(temp_dir, ["settings:frequency", "_back"])
+        """Selecting frequency tracking closes the menu after toggling."""
+        ctx, backend = create_context(temp_dir, ["settings:frequency"])
         plugin = SettingsPlugin()
 
-        plugin.run(ctx)
+        result = plugin.run(ctx)
 
-        # Should show settings menu twice (once before action, once after)
-        assert len(backend.captures) == 2
+        # Should show settings menu once, then close after action
+        assert len(backend.captures) == 1
         assert backend.captures[0].prompt == "Settings"
-        assert backend.captures[1].prompt == "Settings"
+
+        from menu_kit.plugins.base import ActionResult
+
+        assert result == ActionResult.CLOSE
 
     def test_settings_back_exits(self, temp_dir: Path) -> None:
         """Selecting back from settings exits the plugin."""
@@ -317,30 +320,25 @@ class TestNavigationPaths:
         [
             # Back from settings
             (["_back"], ["Settings"]),
-            # Toggle frequency (action)
+            # Toggle frequency (action closes menu)
             (
-                ["settings:frequency", "_back"],
-                ["Settings", "Settings"],
+                ["settings:frequency"],
+                ["Settings"],
             ),
-            # Backend submenu - back out
+            # Backend submenu - back out returns to settings
             (
                 ["settings:backend", "_back", "_back"],
                 ["Settings", "Select Backend", "Settings"],
             ),
-            # Backend submenu - select option
+            # Backend submenu - select option closes menu
             (
-                ["settings:backend", "settings:backend:rofi", "_back"],
-                ["Settings", "Select Backend", "Settings"],
+                ["settings:backend", "settings:backend:rofi"],
+                ["Settings", "Select Backend"],
             ),
-            # Rebuild cache (action) - shows result menu
+            # Rebuild cache (action closes menu)
             (
-                ["settings:rebuild", "_done", "_back"],
-                ["Settings", "Rebuild Cache", "Settings"],
-            ),
-            # Multiple actions before exit
-            (
-                ["settings:frequency", "settings:rebuild", "_done", "_back"],
-                ["Settings", "Settings", "Rebuild Cache", "Settings"],
+                ["settings:rebuild"],
+                ["Settings"],
             ),
         ],
     )
@@ -361,10 +359,10 @@ class TestNavigationPaths:
         [
             # Back from plugins main
             (["_back"], ["Plugins"]),
-            # Check for updates action (shows result screen when no plugins installed)
+            # Check for updates action (closes menu, uses notify)
             (
-                ["plugins:updates", "_done", "_back"],
-                ["Plugins", "Update Plugins", "Plugins"],
+                ["plugins:updates"],
+                ["Plugins"],
             ),
             # Navigate to Installed, then back
             (
@@ -452,7 +450,9 @@ class TestMenuItemBehavior:
         disable_notify_send: None,
     ) -> None:
         """Selecting a backend option shows confirmation notification."""
-        ctx, _ = create_context(temp_dir, ["settings:backend", "settings:backend:fzf", "_back"])
+        ctx, _ = create_context(
+            temp_dir, ["settings:backend", "settings:backend:fzf", "_back"]
+        )
         plugin = SettingsPlugin()
 
         plugin.run(ctx)
@@ -460,39 +460,52 @@ class TestMenuItemBehavior:
         captured = capsys.readouterr()
         assert "backend" in captured.out.lower() or "fzf" in captured.out.lower()
 
-    def test_settings_rebuild_shows_result(self, temp_dir: Path) -> None:
-        """Selecting Rebuild Cache shows result screen."""
-        # Need extra selection to dismiss the result menu
-        ctx, backend = create_context(temp_dir, ["settings:rebuild", "_done", "_back"])
-        plugin = SettingsPlugin()
-
-        plugin.run(ctx)
-
-        # Check that the result menu was shown
-        result_menus = [c for c in backend.captures if c.prompt == "Rebuild Cache"]
-        assert len(result_menus) == 1
-        # Should show cache rebuilt message
-        result_menu = result_menus[0]
-        messages = [i.title.lower() for i in result_menu.items]
-        assert any("cache" in m or "rebuilt" in m for m in messages)
-
-    def test_plugins_updates_shows_result(
+    def test_settings_rebuild_closes_menu(
         self,
         temp_dir: Path,
+        capsys: pytest.CaptureFixture[str],
+        disable_notify_send: None,
     ) -> None:
-        """Selecting Check for Updates shows result screen."""
-        ctx, backend = create_context(temp_dir, ["plugins:updates", "_done", "_back"])
+        """Selecting Rebuild Cache closes menu and sends notification."""
+        ctx, backend = create_context(temp_dir, ["settings:rebuild"])
+        plugin = SettingsPlugin()
+
+        from menu_kit.plugins.base import ActionResult
+
+        result = plugin.run(ctx)
+
+        # Should close after action
+        assert result == ActionResult.CLOSE
+        # Only one menu shown (the settings menu)
+        assert len(backend.captures) == 1
+        # Notification was sent
+        captured = capsys.readouterr()
+        assert "cache" in captured.out.lower()
+
+    def test_plugins_updates_closes_menu(
+        self,
+        temp_dir: Path,
+        capsys: pytest.CaptureFixture[str],
+        disable_notify_send: None,
+    ) -> None:
+        """Selecting Check for Updates closes menu and sends notification."""
+        ctx, backend = create_context(temp_dir, ["plugins:updates"])
         plugin = PluginsPlugin()
 
-        plugin.run(ctx)
+        from menu_kit.plugins.base import ActionResult
 
-        # Should show "Update Plugins" result screen
-        result_menus = [c for c in backend.captures if c.prompt == "Update Plugins"]
-        assert len(result_menus) == 1
-        # With no installed plugins (only bundled), should show appropriate message
-        messages = [i.title.lower() for i in result_menus[0].items]
-        assert any("no installed" in m or "up to date" in m for m in messages)
+        result = plugin.run(ctx)
 
+        # Should close after action
+        assert result == ActionResult.CLOSE
+        # Only one menu shown (the plugins menu)
+        assert len(backend.captures) == 1
+        # Notification was sent
+        captured = capsys.readouterr()
+        assert (
+            "no installed" in captured.out.lower()
+            or "up to date" in captured.out.lower()
+        )
 
     def test_plugins_browse_repo_shows_plugins_or_error(
         self,
@@ -554,7 +567,9 @@ class TestMenuItemBehavior:
 
         installed_menu = backend.captures[1]
         # Should have no plugin items (only back button) since core plugins are filtered
-        plugin_items = [i for i in installed_menu.items if i.id.startswith("plugins:info:")]
+        plugin_items = [
+            i for i in installed_menu.items if i.id.startswith("plugins:info:")
+        ]
         assert len(plugin_items) == 0
 
     def test_plugins_main_shows_installed_count(self, temp_dir: Path) -> None:
@@ -622,7 +637,11 @@ class TestMenuItemConsistency:
         plugin.run(ctx)
 
         for capture in backend.captures:
-            back_items = [i for i, item in enumerate(capture.items) if item.id == "_back"]
+            back_items = [
+                i for i, item in enumerate(capture.items) if item.id == "_back"
+            ]
             if back_items:
                 expected_pos = len(capture.items) - 1
-                assert back_items[0] == expected_pos, f"Back button not last in '{capture.prompt}'"
+                assert back_items[0] == expected_pos, (
+                    f"Back button not last in '{capture.prompt}'"
+                )

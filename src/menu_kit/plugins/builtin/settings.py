@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from menu_kit.core.database import ItemType, MenuItem
-from menu_kit.plugins.base import Plugin, PluginContext, PluginInfo
+from menu_kit.plugins.base import ActionResult, Plugin, PluginContext, PluginInfo
 
 # Available backends (in priority order)
 BACKENDS = ["auto", "rofi", "dmenu", "fuzzel", "fzf"]
@@ -25,7 +25,7 @@ class SettingsPlugin(Plugin):
             description="Configure menu-kit options",
         )
 
-    def run(self, ctx: PluginContext, action: str = "") -> None:
+    def run(self, ctx: PluginContext, action: str = "") -> ActionResult:
         """Show settings menu."""
         while True:
             items = [
@@ -50,14 +50,19 @@ class SettingsPlugin(Plugin):
 
             selected = ctx.menu(items, prompt="Settings")
             if selected is None:
-                return
+                return ActionResult.BACK
 
             if selected.id == "settings:rebuild":
                 self._rebuild_cache(ctx)
+                return ActionResult.CLOSE
             elif selected.id == "settings:frequency":
                 self._toggle_frequency(ctx)
+                return ActionResult.CLOSE
             elif selected.id == "settings:backend":
-                self._select_backend(ctx)
+                result = self._select_backend(ctx)
+                if result == ActionResult.CLOSE:
+                    return ActionResult.CLOSE
+                # BACK from backend submenu: continue settings loop
 
     def _toggle_frequency(self, ctx: PluginContext) -> None:
         """Toggle frequency tracking on/off."""
@@ -66,7 +71,7 @@ class SettingsPlugin(Plugin):
         state = "enabled" if ctx.config.frequency_tracking else "disabled"
         ctx.notify(f"Frequency tracking {state}")
 
-    def _select_backend(self, ctx: PluginContext) -> None:
+    def _select_backend(self, ctx: PluginContext) -> ActionResult:
         """Show backend selection submenu."""
         while True:
             current = ctx.config.menu.backend or "auto"
@@ -85,14 +90,14 @@ class SettingsPlugin(Plugin):
 
             selected = ctx.menu(items, prompt="Select Backend")
             if selected is None:
-                return
+                return ActionResult.BACK
 
             # Extract backend name from ID
             backend = selected.id.split(":")[-1]
             ctx.config.menu.backend = "" if backend == "auto" else backend
             ctx.config.save()
             ctx.notify(f"Backend set to {backend}")
-            return
+            return ActionResult.CLOSE
 
     def _rebuild_cache(self, ctx: PluginContext) -> None:
         """Trigger a cache rebuild."""
@@ -101,10 +106,10 @@ class SettingsPlugin(Plugin):
         if loader is not None:
             loader.index_all()
             item_count = len(ctx.database.get_items())
-            ctx.show_result(f"Cache rebuilt ({item_count} items)", prompt="Rebuild Cache")
+            ctx.notify(f"Cache rebuilt ({item_count} items)")
         else:
             ctx.database.clear_items()
-            ctx.show_result("Cache cleared", prompt="Rebuild Cache")
+            ctx.notify("Cache cleared")
 
     def index(self, ctx: PluginContext) -> list[MenuItem]:
         """Register settings in main menu."""

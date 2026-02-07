@@ -10,6 +10,7 @@ from menu_kit.core.config import Config
 from menu_kit.core.database import Database, ItemType, MenuItem
 from menu_kit.core.display_mode import DisplayMode, DisplayModeManager
 from menu_kit.menu.base import GUI_BACKENDS, get_backend
+from menu_kit.plugins.base import ActionResult
 from menu_kit.plugins.loader import PluginLoader
 
 if TYPE_CHECKING:
@@ -221,7 +222,7 @@ class Runner:
 
             result = self.backend.show(items, prompt="menu-kit")
 
-            # Exit only when cancelled from main menu
+            # ESC at main menu level exits the app
             if result.cancelled or result.selected is None:
                 return EXIT_CANCELLED
 
@@ -229,26 +230,25 @@ class Runner:
 
             # Handle submenu entry selection
             if item.id.startswith("_submenu:"):
-                from menu_kit.plugins.base import MenuCancelled
-
                 plugin_name = item.id[9:]  # Remove "_submenu:" prefix
-                try:
-                    if self._show_plugin_submenu(plugin_name, display_manager):
-                        return EXIT_SUCCESS  # Plugin was executed, exit
-                except MenuCancelled:
-                    return EXIT_CANCELLED  # ESC pressed, exit
+                submenu_result = self._show_plugin_submenu(plugin_name, display_manager)
+                if submenu_result == ActionResult.CLOSE:
+                    return EXIT_SUCCESS
+                # BACK or None: continue loop (show main menu again)
                 continue
 
             # Record usage
             if self.config.frequency_tracking:
                 self.database.record_use(item.id)
 
-            # Execute plugin and exit (launcher behavior)
+            # Execute plugin
             if item.plugin:
                 action = ""
                 if ":" in item.id:
                     _, action = item.id.split(":", 1)
-                self.loader.run_plugin(item.plugin, action)
+                action_result = self.loader.run_plugin(item.plugin, action)
+                if action_result == ActionResult.BACK:
+                    continue  # Show main menu again
                 return EXIT_SUCCESS
 
     def _build_main_menu(self, display_manager: DisplayModeManager) -> list[MenuItem]:
@@ -287,7 +287,9 @@ class Runner:
                 result.append(
                     MenuItem(
                         id=item.id,
-                        title=display_manager.format_inline_title(item.plugin, item.title),
+                        title=display_manager.format_inline_title(
+                            item.plugin, item.title
+                        ),
                         item_type=item.item_type,
                         path=item.path,
                         plugin=item.plugin,
@@ -341,18 +343,15 @@ class Runner:
         else:
             return items
 
-    def _show_plugin_submenu(self, plugin_name: str, display_manager: DisplayModeManager) -> bool:
+    def _show_plugin_submenu(
+        self, plugin_name: str, display_manager: DisplayModeManager
+    ) -> ActionResult:
         """Show items for a plugin in submenu mode.
 
         Returns:
-            True if a plugin was executed (caller should exit),
-            False if back button selected (caller should continue).
-
-        Raises:
-            MenuCancelled: If user presses ESC (should exit entire menu).
+            ActionResult.CLOSE if a plugin action completed (caller should exit).
+            ActionResult.BACK if user navigated back (caller should continue).
         """
-        from menu_kit.plugins.base import MenuCancelled
-
         assert self.database is not None
         assert self.backend is not None
         assert self.config is not None
@@ -365,19 +364,20 @@ class Runner:
             items = self.database.get_items(plugin=plugin_name, order_by_frequency=True)
 
             if not items:
-                return False
+                return ActionResult.BACK
 
             # Add back button
             items.append(MenuItem(id="_back", title="Back", item_type=ItemType.ACTION))
 
             result = self.backend.show(items, prompt=prompt)
 
-            # ESC pressed - propagate up to exit entire menu
-            if result.cancelled:
-                raise MenuCancelled()
-
-            if result.selected is None or result.selected.id == "_back":
-                return False
+            # ESC or Back: go back to main menu
+            if (
+                result.cancelled
+                or result.selected is None
+                or result.selected.id == "_back"
+            ):
+                return ActionResult.BACK
 
             item = result.selected
 
@@ -385,15 +385,17 @@ class Runner:
             if self.config.frequency_tracking:
                 self.database.record_use(item.id)
 
-            # Execute and exit
+            # Execute plugin action
             if item.plugin:
                 action = ""
                 if ":" in item.id:
                     _, action = item.id.split(":", 1)
-                self.loader.run_plugin(item.plugin, action)
-                return True  # Signal to exit menu
+                action_result = self.loader.run_plugin(item.plugin, action)
+                if action_result == ActionResult.BACK:
+                    continue  # Show submenu again
+                return ActionResult.CLOSE
 
-            return False
+            return ActionResult.BACK
 
     def _format_item(self, item: MenuItem, prefix: str) -> str:
         """Format an item for display."""

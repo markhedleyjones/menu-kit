@@ -10,7 +10,7 @@ from typing import Any
 from menu_kit.core.config import get_data_dir
 from menu_kit.core.database import ItemType, MenuItem
 from menu_kit.core.display_mode import DisplayMode, DisplayModeManager
-from menu_kit.plugins.base import Plugin, PluginContext, PluginInfo
+from menu_kit.plugins.base import ActionResult, Plugin, PluginContext, PluginInfo
 
 
 class PluginsPlugin(Plugin):
@@ -29,16 +29,16 @@ class PluginsPlugin(Plugin):
             description="Browse and manage plugins",
         )
 
-    def run(self, ctx: PluginContext, action: str = "") -> None:
+    def run(self, ctx: PluginContext, action: str = "") -> ActionResult:
         """Show plugins menu."""
         if action == "installed":
-            self._show_installed(ctx)
+            return self._show_installed(ctx)
         elif action == "browse":
-            self._show_browse(ctx)
+            return self._show_browse(ctx)
         else:
-            self._show_main_menu(ctx)
+            return self._show_main_menu(ctx)
 
-    def _show_main_menu(self, ctx: PluginContext) -> None:
+    def _show_main_menu(self, ctx: PluginContext) -> ActionResult:
         """Show main plugins menu."""
         bundled_plugins = {"settings", "plugins"}
 
@@ -68,14 +68,19 @@ class PluginsPlugin(Plugin):
 
             selected = ctx.menu(items, prompt="Plugins")
             if selected is None:
-                return
+                return ActionResult.BACK
 
             if selected.id == "plugins:installed":
-                self._show_installed(ctx)
+                result = self._show_installed(ctx)
+                if result == ActionResult.CLOSE:
+                    return ActionResult.CLOSE
             elif selected.id == "plugins:browse":
-                self._show_browse(ctx)
+                result = self._show_browse(ctx)
+                if result == ActionResult.CLOSE:
+                    return ActionResult.CLOSE
             elif selected.id == "plugins:updates":
                 self._check_for_updates(ctx)
+                return ActionResult.CLOSE
 
     def _version_is_newer(self, new_ver: str, current_ver: str) -> bool:
         """Check if new_ver is newer than current_ver using semver-style comparison."""
@@ -98,11 +103,13 @@ class PluginsPlugin(Plugin):
 
         # Get non-bundled plugins
         updatable_plugins = {
-            name: info for name, info in installed.items() if name not in bundled_plugins
+            name: info
+            for name, info in installed.items()
+            if name not in bundled_plugins
         }
 
         if not updatable_plugins:
-            ctx.show_result("No installed plugins to check", prompt="Update Plugins")
+            ctx.notify("No installed plugins to check")
             return
 
         # Check each repository for updates
@@ -123,7 +130,7 @@ class PluginsPlugin(Plugin):
                         updates_available[name] = (current_ver, new_ver, repo, info)
 
         if not updates_available:
-            ctx.show_result("All plugins are up to date", prompt="Update Plugins")
+            ctx.notify("All plugins are up to date")
             return
 
         self._show_updates_menu(ctx, updates_available)
@@ -172,10 +179,10 @@ class PluginsPlugin(Plugin):
                 if plugin_name in updates:
                     current_ver, new_ver, repo, info = updates[plugin_name]
                     self._update_single_plugin(ctx, plugin_name, repo, info)
-                    # Remove from updates dict after successful update
                     del updates[plugin_name]
                     if not updates:
                         return
+                    # Continue loop to show remaining updates
 
     def _update_single_plugin(
         self,
@@ -187,15 +194,15 @@ class PluginsPlugin(Plugin):
         """Update a single plugin by reinstalling it."""
         # Uninstall first
         if not self._uninstall_plugin(ctx, plugin_name):
-            ctx.show_result(f"Failed to remove old version of '{plugin_name}'", prompt="Update Plugin")
+            ctx.notify(f"Failed to remove old version of '{plugin_name}'")
             return False
 
         # Reinstall
         if self._install_plugin(ctx, repo, plugin_name, plugin_info):
-            ctx.show_result(f"Plugin '{plugin_name}' updated successfully", prompt="Update Plugin")
+            ctx.notify(f"Plugin '{plugin_name}' updated successfully")
             return True
         else:
-            ctx.show_result(f"Failed to install new version of '{plugin_name}'", prompt="Update Plugin")
+            ctx.notify(f"Failed to install new version of '{plugin_name}'")
             return False
 
     def _update_all_plugins(
@@ -207,7 +214,7 @@ class PluginsPlugin(Plugin):
         success_count = 0
         fail_count = 0
 
-        for name, (current_ver, new_ver, repo, info) in updates.items():
+        for name, (_current_ver, _new_ver, repo, info) in updates.items():
             # Uninstall old
             if not self._uninstall_plugin(ctx, name):
                 fail_count += 1
@@ -221,13 +228,11 @@ class PluginsPlugin(Plugin):
 
         # Show result
         if fail_count == 0:
-            message = f"Updated {success_count} plugin(s) successfully"
+            ctx.notify(f"Updated {success_count} plugin(s) successfully")
         else:
-            message = f"Updated {success_count}, failed {fail_count}"
+            ctx.notify(f"Updated {success_count}, failed {fail_count}")
 
-        ctx.show_result(message, prompt="Update Plugins")
-
-    def _show_installed(self, ctx: PluginContext) -> None:
+    def _show_installed(self, ctx: PluginContext) -> ActionResult:
         """Show installed plugins."""
         display_manager = DisplayModeManager(ctx.config, ctx.database)
         bundled_plugins = {"settings", "plugins"}
@@ -237,7 +242,8 @@ class PluginsPlugin(Plugin):
 
             # Filter out core plugins that can't be configured
             configurable = {
-                name: info for name, info in installed.items()
+                name: info
+                for name, info in installed.items()
                 if name not in bundled_plugins
             }
 
@@ -261,23 +267,25 @@ class PluginsPlugin(Plugin):
 
             selected = ctx.menu(items, prompt="Installed Plugins")
             if selected is None:
-                return
+                return ActionResult.BACK
 
             # Extract plugin name from ID
             plugin_name = selected.id.replace("plugins:info:", "")
-            self._show_plugin_options(ctx, plugin_name, display_manager)
+            result = self._show_plugin_options(ctx, plugin_name, display_manager)
+            if result == ActionResult.CLOSE:
+                return ActionResult.CLOSE
 
     def _show_plugin_options(
         self,
         ctx: PluginContext,
         plugin_name: str,
         display_manager: DisplayModeManager,
-    ) -> None:
+    ) -> ActionResult:
         """Show options for a specific plugin."""
         installed = ctx.get_installed_plugins()
         info = installed.get(plugin_name)
         if info is None:
-            return
+            return ActionResult.BACK
 
         # Plugins that only have submenu items (no individual items to inline)
         submenu_only_plugins = {"settings", "plugins"}
@@ -326,7 +334,7 @@ class PluginsPlugin(Plugin):
 
             selected = ctx.menu(items, prompt=plugin_name.title())
             if selected is None:
-                return
+                return ActionResult.BACK
 
             if selected.id.endswith(":toggle"):
                 # Toggle display mode
@@ -337,30 +345,24 @@ class PluginsPlugin(Plugin):
                 )
                 display_manager.set_mode(plugin_name, new_mode)
                 ctx.notify(f"Display mode changed to {new_mode.value}")
+                return ActionResult.CLOSE
             elif selected.id.endswith(":uninstall"):
                 if self._uninstall_plugin(ctx, plugin_name):
-                    ctx.show_result(
-                        f"Plugin '{plugin_name}' uninstalled",
-                        prompt="Uninstall Plugin",
-                    )
-                    return  # Go back to installed list
+                    ctx.notify(f"Plugin '{plugin_name}' uninstalled")
                 else:
-                    ctx.show_result(
-                        f"Failed to uninstall plugin '{plugin_name}'",
-                        prompt="Uninstall Plugin",
-                    )
+                    ctx.notify(f"Failed to uninstall plugin '{plugin_name}'")
+                return ActionResult.CLOSE
 
     # Official repository identifier
     OFFICIAL_REPO = "markhedleyjones/menu-kit-plugins"
 
-    def _show_browse(self, ctx: PluginContext) -> None:
+    def _show_browse(self, ctx: PluginContext) -> ActionResult:
         """Show available plugins for installation."""
         repos = ctx.config.plugins.repositories
 
         # Skip repository selection if only one repo configured
         if len(repos) == 1:
-            self._show_repo_plugins(ctx, repos[0])
-            return
+            return self._show_repo_plugins(ctx, repos[0])
 
         while True:
             items = []
@@ -377,11 +379,13 @@ class PluginsPlugin(Plugin):
 
             selected = ctx.menu(items, prompt="Select Repository")
             if selected is None:
-                return
+                return ActionResult.BACK
 
             if selected.id.startswith("plugins:repo:"):
                 repo = selected.id.replace("plugins:repo:", "")
-                self._show_repo_plugins(ctx, repo)
+                result = self._show_repo_plugins(ctx, repo)
+                if result == ActionResult.CLOSE:
+                    return ActionResult.CLOSE
 
     def _fetch_repo_index(self, repo: str) -> dict[str, Any] | None:
         """Fetch index.json from a GitHub repository."""
@@ -393,12 +397,12 @@ class PluginsPlugin(Plugin):
         except Exception:
             return None
 
-    def _show_repo_plugins(self, ctx: PluginContext, repo: str) -> None:
+    def _show_repo_plugins(self, ctx: PluginContext, repo: str) -> ActionResult:
         """Show plugins available in a repository."""
         index = self._fetch_repo_index(repo)
         if index is None:
             ctx.notify(f"Failed to fetch plugins from {repo}")
-            return
+            return ActionResult.BACK
 
         installed = ctx.get_installed_plugins()
 
@@ -434,15 +438,17 @@ class PluginsPlugin(Plugin):
             title = "Official" if repo == self.OFFICIAL_REPO else repo
             selected = ctx.menu(items, prompt=title)
             if selected is None:
-                return
+                return ActionResult.BACK
 
             if selected.id.startswith("plugins:available:"):
                 parts = selected.id.split(":", 3)
                 plugin_name = parts[3]
                 plugin_info = plugins.get(plugin_name, {})
-                self._show_plugin_install_options(
+                result = self._show_plugin_install_options(
                     ctx, repo, plugin_name, plugin_info, plugin_name in installed
                 )
+                if result == ActionResult.CLOSE:
+                    return ActionResult.CLOSE
 
     def _show_plugin_install_options(
         self,
@@ -451,7 +457,7 @@ class PluginsPlugin(Plugin):
         plugin_name: str,
         plugin_info: dict[str, Any],
         is_installed: bool,
-    ) -> None:
+    ) -> ActionResult:
         """Show install/info options for a plugin."""
         while True:
             items = [
@@ -481,20 +487,14 @@ class PluginsPlugin(Plugin):
 
             selected = ctx.menu(items, prompt=plugin_name.title())
             if selected is None:
-                return
+                return ActionResult.BACK
 
             if selected.id.endswith(":install"):
                 if self._install_plugin(ctx, repo, plugin_name, plugin_info):
-                    ctx.show_result(
-                        f"Plugin '{plugin_name}' installed successfully",
-                        prompt="Install Plugin",
-                    )
-                    return
+                    ctx.notify(f"Plugin '{plugin_name}' installed successfully")
                 else:
-                    ctx.show_result(
-                        f"Failed to install plugin '{plugin_name}'",
-                        prompt="Install Plugin",
-                    )
+                    ctx.notify(f"Failed to install plugin '{plugin_name}'")
+                return ActionResult.CLOSE
 
     def _install_plugin(
         self,

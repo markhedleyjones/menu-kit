@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from menu_kit.core.config import get_config_dir, get_data_dir
 from menu_kit.core.database import MenuItem
-from menu_kit.plugins.base import Plugin, PluginContext
+from menu_kit.plugins.base import ActionResult, Plugin, PluginContext
 
 if TYPE_CHECKING:
     from menu_kit.core.config import Config
@@ -66,7 +66,11 @@ class PluginLoader:
             if item.is_dir() and (item / "__init__.py").exists():
                 # Package plugin
                 self._load_plugin_package(item)
-            elif item.is_file() and item.suffix == ".py" and not item.name.startswith("_"):
+            elif (
+                item.is_file()
+                and item.suffix == ".py"
+                and not item.name.startswith("_")
+            ):
                 # Single-file plugin
                 self._load_plugin_file(item)
 
@@ -166,7 +170,7 @@ class PluginLoader:
 
         return True
 
-    def run_plugin(self, name: str, action: str = "") -> bool:
+    def run_plugin(self, name: str, action: str = "") -> ActionResult | None:
         """Run a plugin by name.
 
         Args:
@@ -174,7 +178,7 @@ class PluginLoader:
             action: Action to run (overrides suffix in name)
 
         Returns:
-            True if plugin was found and run, False otherwise
+            ActionResult controlling flow, or None if plugin not found.
         """
         from menu_kit.plugins.base import MenuCancelled
 
@@ -186,17 +190,19 @@ class PluginLoader:
         ctx = self.get_context(name)
 
         if plugin is None or ctx is None:
-            return False
+            return None
 
         try:
-            plugin.run(ctx, action)
-            return True
+            result = plugin.run(ctx, action)
+            if result is None:
+                return ActionResult.CLOSE
+            return result
         except MenuCancelled:
-            # User pressed ESC - this is a normal exit, not an error
-            return True
+            # Legacy plugins that let MenuCancelled propagate
+            return ActionResult.BACK
         except Exception as e:
             print(f"Error running plugin {name}: {e}")
-            return False
+            return ActionResult.CLOSE
 
     def index_all(self, cacheable_only: bool = True) -> None:
         """Rebuild the index from all plugins.
